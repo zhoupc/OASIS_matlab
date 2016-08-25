@@ -86,23 +86,23 @@ saveas(gcf, 'fig/threshAR1.pdf');
 % simulation 
 g = [1.7, -0.712]; 
 sn = 1; 
-seed = 3; 
+seed = 1; 
 [Y, trueC, trueSpikes] = gen_data(g, sn, [],[],[],[], [], seed); 
-Y(:, 1:150) = []; 
-trueC(:,1:150) = []; 
-trueSpikes(:,1:150) = []; 
+% Y(:, 1:150) = []; 
+% trueC(:,1:150) = []; 
+% trueSpikes(:,1:150) = []; 
 y = Y(1, :); 
 
 % run deconvolution 
 [c, s] = constrained_foopsi(y, g, sn); 
-% [c_t, s_t] = oasisAR2(y, g, 0, .55); 
+[c_t, s_t] = oasisAR2(y, g(1), g(2), 0, .55); 
 
 % check the dependence on smin 
-% smin = 0:0.1:1.1; 
-% res = zeros(length(smin), length(y)); 
-% for m=1:length(smin)
-%     [~, res(m, :)] = oasisAR2(y, g, 0, smin(m)); 
-% end
+smin = 0:0.1:1.1; 
+res = zeros(length(smin), length(y)); 
+for m=1:length(smin)
+    [~, res(m, :)] = oasisAR2(y, g(1), g(2), 0, smin(m)); 
+end
 % plot results 
 figure('papersize', [10,9]); 
 init_fig; 

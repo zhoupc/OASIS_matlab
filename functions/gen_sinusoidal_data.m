@@ -1,4 +1,4 @@
-function [Y, truth, trueSpikes] = gen_data(gam, noise, T, framerate, ...
+function [Y, truth, trueSpikes] = gen_sinusoidal_data(gam, noise, T, framerate, ...
     firerate, b, N, seed)
 
 %% input arguments 
@@ -35,7 +35,7 @@ p = length(gam);
 gam = [flipud(reshape(gam, [], 1)); 1]; 
 
 for t=(p+1):T
-    truth(:, t) = truth(:, (t-p):t) * gam;
+    truth(:, t) = truth(:, (t-p):t) * gam; 
 end 
 
 Y = b + truth + noise * randn(N, T); 

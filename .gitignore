@@ -7,3 +7,5 @@ examples/*.m~
 
 optimization/*
 functions/*.m~
+
+*.m~
