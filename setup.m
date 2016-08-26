@@ -2,7 +2,6 @@ oasis_folder = fileparts(mfilename('fullpath'));
 addpath(sprintf('%s%sfunctions', oasis_folder, filesep)); 
 addpath(sprintf('%s%soasis', oasis_folder, filesep)); 
 
-
 %% install convex optimization solvers
 optimization_folder = sprintf('%s%soptimization', oasis_folder, filesep); 
 if ~exist(optimization_folder, 'dir'); 
@@ -28,3 +27,6 @@ if isempty(which('cvx_begin.m'))
     end
     run(sprintf('%s%scvx%scvx_setup', optimization_folder, filesep, filesep));
 end
+
+%% save the current path 
+savepath(); 
