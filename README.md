@@ -7,8 +7,10 @@ MATLAB: https://github.com/zhoupc/OASIS_matlab
 
 ### Installation
 Run setup.m to add OASIS function to the search path of MATLAB
->> setup 
+
+`>> setup`
 
 ### Examples
-The scripts to produce the figures are in the subfolder 'examples' with names obvious from the arXiv paper. 
-They can be run with `>> run examples/fig*.py`. 
+The scripts to reproduce the figures are in the subfolder 'examples' with names obvious from the arXiv paper. 
+They can be run with 
+`>> run examples/fig*.py`. 
