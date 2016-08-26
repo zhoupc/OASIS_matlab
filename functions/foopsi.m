@@ -40,7 +40,7 @@ ind = (indc>0);
 G = sparse(indr(ind), indc(ind), v(ind), T, T);
 
 %% run optimization
-cvx_solver(solver); 
+% cvx_solver(solver); 
 cvx_begin quiet
 variable c(T)
 minimize(0.5*(c-y)'*(c-y) + lam*(1-sum(g))*norm(c,1))

@@ -76,9 +76,11 @@ end
 
 %% construct solution for all t
 c = zeros(size(y));
+s = c; 
 for ii=1:len_active_set
     t0 = active_set(ii,3); 
     tau = active_set(ii, 4); 
     c(t0:(t0+tau-1)) = max(0,active_set(ii,1)/active_set(ii,2)) * (g.^(0:(tau-1)));
 end
-s = [0; c(2:end)-g*c(1:(end-1))]; 
+
+s(active_set(2:end,3)) = c(active_set(2:end,3)) - g*c(active_set(2:end,3)-1);

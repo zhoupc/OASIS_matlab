@@ -1,3 +1,4 @@
+addpath('./scripts'); 
 %% figures 
 gam = .8; 
 T = 25; 

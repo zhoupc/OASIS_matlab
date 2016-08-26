@@ -29,7 +29,8 @@ end
 
 %% run simulation 
 rng(seed); 
-trueSpikes = (rand(N, T) < firerate/framerate); 
+trueSpikes = bsxfun(@lt, rand(N, T),...
+    4 * firerate/framerate * sin((1:T)/50).^3); 
 truth = double(trueSpikes); 
 p = length(gam); 
 gam = [flipud(reshape(gam, [], 1)); 1]; 

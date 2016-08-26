@@ -54,7 +54,7 @@ tic;
 for m=1:N
     [c_oasis, s_oasis] = oasisAR1(Y(m,:), g, lam);
 end
-fprintf('online NNLS: %.3f seconds\n', toc);
+fprintf('OASIS: %.3f seconds\n', toc);
 
 tic;
 for m=1:N
