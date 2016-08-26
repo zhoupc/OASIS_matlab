@@ -1,4 +1,4 @@
-function [c, s] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter)
+function [c, s, Aset] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter)
 %% Infer the most likely discretized spike train underlying an AR(2) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g1*c_{t-1}-g2*c_{t-2} >=s_min or =0
@@ -22,6 +22,7 @@ function [c, s] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter)
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
 %   s: T*1 vector, discetized deconvolved neural activity (spikes) 
+%   Aset: npool * 4 matrix, active set 
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
 % ported from the Python implementation from Johannes Friedrich

@@ -1,4 +1,5 @@
-function [c, s, Aset] = oasisAR1(y, g, lam, smin, Aset)
+function [c, s, Aset] = constrained_oasisAR1(y, g, sn, optimize_b,...
+    optimize_g, decimate, maxIter)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >=s_min or =0
@@ -8,14 +9,21 @@ function [c, s, Aset] = oasisAR1(y, g, lam, smin, Aset)
         %withone entry per time-bin.
 %   g:  scalar, Parameter of the AR(1) process that models the fluorescence ...
         %impulse response.   
-%   lam:  scalar, sparsity penalty parameter lambda. 
-%   smin: scalar, optional, default 0
-        %miniumal non-zero activity within each bin (minimal 'spike size').
+%   sn:  scalar, standard deviation of the noise distribution 
+%   optimize_b: bool, optimize baseline if True
+%   optimize_g: integer, number of large, isolated events to consider for
+%       optimizing g 
+%   decimate: int, decimation factor for estimating hyper-parameters faster
+%       on decimated data 
+%   maxIter:  int, maximum number of iterations 
 %   Aset: npool x 4 matrix, warm stared active sets 
        
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
 %   s: T*1 vector, discetized deconvolved neural activity (spikes) 
+%   b: scalar, fluorescence baseline 
+%   g: scalar, parameter of the AR(1) process 
+%   lam: scalar, sparsity penalty parameter 
 %   Aset: npool x 4 matrix, active sets 
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
