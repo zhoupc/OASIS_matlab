@@ -3,7 +3,7 @@ close all; clc;
 addpath('./scripts'); 
 col = {[0 114 178],[0 158 115], [213 94 0],[230 159 0],...
     [86 180 233], [204 121 167], [64 224 208], [240 228 66]};
-figure; 
+figure('papersize', [14.4, 7.2]); 
 init_fig; 
 
 %% load the test data  
@@ -64,7 +64,7 @@ for m=1:length(lam_vec);
     RSS_vec(m) = norm((res-lam_vec(m)*temp),2)^2; 
 end
 
-axes('position', [ax0, .75, .09, .12]); hold on; 
+axes('position', [ax0, .75, .08, .12]); hold on; 
 plot(lam_vec, RSS_vec, 'color', col{2}/255); 
 
 % the optimal value 
@@ -87,7 +87,7 @@ fig5_plot_trace;
 
 %% solve for gamma 
 [~, ~, g] = update_g(y, active_set,g, lam); 
-axes('position', [ax0, .45, .08, .12]); hold on; 
+axes('position', [ax0, .47, .08, .12]); hold on; 
 g_vec = linspace(.85, 0.99); 
 rss_vec = compute_rss_g(g_vec, y, active_set, lam); 
 plot(g_vec, rss_vec, 'color', col{2}/255); 
@@ -129,14 +129,15 @@ end
 axes('position', [ax1, .07,  1 - ax1, .12]); 
 hold on; 
 fig5_plot_trace; 
-sol_given_g = constrained_foopsi(y, .95, sn); 
+sol_given_g = constrained_oasisAR1(y, .95, sn); 
 estimated_g = estimate_parameters(y, 1); 
 fprintf('\n*******************\n'); 
 fprintf('estimated gamma via autocorrelation: %.4f\n', estimated_g); 
 fprintf('optimized gamma                    : %.4f\n', g); 
 fprintf('\n*******************\n'); 
-sol_PSD_g = oasisAR1(y, estimated_g, 0); 
+sol_PSD_g = constrained_oasisAR1(y, estimated_g, 0); 
 h1 = plot(sol_given_g, '--', 'color', col{7}/255); 
-h2 = plot(sol_PSD_g, 'color', col{5}/255); 
+h2 = plot(sol_PSD_g, 'color', col{6}/255); 
 legend([h1, h2], 'true \gamma', '\gamma from autocovariance', ...
     'orientation', 'horizontal', 'location', [0.01+ax1, 0.16, 0.35, 0.0345]); 
+saveas(gcf, 'fig/opt_g+l_new.pdf')

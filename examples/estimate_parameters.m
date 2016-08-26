@@ -27,7 +27,7 @@ if ~exist('range_ff', 'var') || isempty(range_ff)
     range_ff = [.25, .5]; 
 end 
 if ~exist('method', 'var') || isempty(method)
-    method = 'logexp'; 
+    method = 'logmexp'; 
 end 
 if ~exist('lags', 'var') || isempty(lags)
     lags = 5; 

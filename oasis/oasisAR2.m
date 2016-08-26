@@ -32,6 +32,9 @@ function [c, s, Aset] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter)
 
 %% initialization
 y = reshape(y, [], 1);
+if ~exist('g', 'var') || isempty(g)
+    g = estimate_time_constant(y); 
+end
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
 if ~exist('smin', 'var') || isempty(smin);   smin = 0; end
 if ~exist('T_over_ISI', 'var') || isempty(T_over_ISI)  
