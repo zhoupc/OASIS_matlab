@@ -102,13 +102,13 @@ if ~optimize_b
             % update lam
             [solution, active_set, lam, spks, flag_lam] = update_lam(y, solution, ...
                 active_set, g, lam, thresh);
-%             
-%             % update g 
-%             if and(optimize_g, ~g_converged);
-%                 g0 = g;
-%                 [solution, active_set, g, spks] = update_g(y, active_set, g, lam);
-%                 if abs(g-g0)/g0 < 1e-4; g_converged = true; end
-%             end
+            
+            % update g 
+            if and(optimize_g, ~g_converged);
+                g0 = g;
+                [solution, active_set, g, spks] = update_g(y, active_set, g, lam);
+                if abs(g-g0)/g0 < 1e-4; g_converged = true; end
+            end
         end
     end
 else
@@ -152,13 +152,15 @@ s = spks;
             idx = 0:(li-1);
             if ii<len_active_set
                 temp(ti+idx) = (1-g^li)/ active_set(ii,2) * h(1:li);
+                tmp_sum = tmp_sum + (1-g^li).^2 / active_set(ii,2);
             else
-                temp(ti+idx) = 1/active_set(ii,2) * h(1:li);
+                temp(ti+idx) = 1/active_set(ii,2) * h(1:li);  
+                tmp_sum = tmp_sum + 1.0 / active_set(ii,2);
             end
-            tmp_sum = tmp_sum + sum((1-h(1:li)).^2 / active_set(ii,2));
         end
-        temp(ti+idx) = temp(ti+idx) - 1.0/T/(1-g) * tmp_sum;
+        temp = temp - tmp_sum/T/((1-g)); 
         
+        res = y - solution - mean(y-solution); 
         aa = temp'*temp;
         bb = res'*temp;
         cc = RSS-thresh;
@@ -169,9 +171,7 @@ s = spks;
         b = b + dphi * (1-g);
         
         % perform shift
-        for ii=1:len_active_set
-            active_set(ii,1) = active_set(ii,1) - dphi*(1-g^active_set(ii,4));
-        end
+        active_set(:,1) = active_set(:,1) - dphi*(1-g.^active_set(:,4));
         
         % run OASIS
         [solution, spks, active_set] = oasisAR1(y, g, [], [], active_set);
@@ -227,15 +227,15 @@ s = spks;
             hs = cumsum(h);
             hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
             yh = zeros(len_active_set,1);
-            for ii=1:len_active_set
-                li = active_set(ii, 4);
-                ti = active_set(ii, 3);
+            for iii=1:len_active_set
+                li = active_set(iii, 4);
+                ti = active_set(iii, 3);
                 idx = ti:(ti+li-1);
                 
-                if ii<len_active_set
-                    yh(ii) = (y(idx)-lam*(1-g))' * h(1:li);
+                if iii<len_active_set
+                    yh(iii) = (y(idx)-lam*(1-g))' * h(1:li);
                 else
-                    yh(ii) = (y(idx)-lam)' * h(1:li);
+                    yh(iii) = (y(idx)-lam)' * h(1:li);
                 end
             end
             aa = hs(active_set(:, 4));

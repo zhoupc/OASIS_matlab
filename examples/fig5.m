@@ -39,14 +39,15 @@ res = y - solution;
 aa = temp'*temp; 
 bb = res'*temp; 
 cc = res'*res - sn^2*T; 
+active_set_0 = active_set; 
 ll = (-bb + sqrt(bb^2-aa*cc)) / aa; 
-active_set(:,1) = active_set(:,1) - ll*(1-g.^(active_set(:,4)));
+active_set_0(:,1) = active_set_0(:,1) - ll*(1-g.^(active_set_0(:,4)));
 spks = 0*spks; 
 for ii=1:len_active_set
     ti = active_set(ii, 3); 
     li = active_set(ii, 4); 
     idx = 0:(li-1); 
-    solution(ti+idx) = active_set(ii,1)/active_set(ii,2) * (g.^(idx));  
+    solution(ti+idx) = active_set_0(ii,1)/active_set_0(ii,2) * (g.^(idx));  
     if ii>1
         spks(ti) = solution(ti) - g*solution(ti-1); 
     end
@@ -81,9 +82,10 @@ set(gca, 'xticklabel', {0, '\lambda^*'});
 
 %% plot result after rerunning oasis to fix violations
 lam = lam + ll; 
-[solution, spks, active_set] = oasisAR1(y, g, lam, [], active_set); 
+[solution, spks, active_set] = oasisAR1(y, g, lam, [], active_set_0); 
 axes('position', [ax1, .59, 1-ax1, .12]); 
 fig5_plot_trace; 
+ylabel('Fluorescence'); 
 
 %% solve for gamma 
 [~, ~, g] = update_g(y, active_set,g, lam); 
@@ -109,7 +111,12 @@ for ii=1:len_active_set
     idx = ti:(ti+li-1); 
     active_set(ii,1) = (y(idx)-lam*(1-g))'*h(1:li); 
     active_set(ii,2) = hh(li); 
-        solution(idx) = active_set(ii,1)/active_set(ii,2) * h(1:li); 
+end
+for ii=1:length(active_set_0)
+    ti = active_set_0(ii,3); 
+    li = active_set_0(ii,4); 
+    idx = ti:(ti+li-1); 
+    solution(idx) = active_set_0(ii,1)/active_set_0(ii,2) * h(1:li); 
 end
 solution(solution<0) = 0; 
 spks = [0; solution(2:end)-g*solution(1:(end-1))]; 
