@@ -24,7 +24,7 @@ function [c, s] = foopsi(y, g, lam, solver)
 %% initialization
 y = reshape(y, [], 1);
 T = length(y);
-if ~exist('g', 'var') || isempty(g);   g = 0.95; end
+if ~exist('g', 'var') || isempty(g);   g = estimate_time_constant(y, 2); end
 
 
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
@@ -41,6 +41,7 @@ G = sparse(indr(ind), indc(ind), v(ind), T, T);
 
 %% run optimization
 % cvx_solver(solver); 
+
 cvx_begin quiet
 variable c(T)
 minimize(0.5*(c-y)'*(c-y) + lam*(1-sum(g))*norm(c,1))

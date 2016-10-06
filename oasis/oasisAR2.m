@@ -1,4 +1,4 @@
-function [c, s, active_set] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter, active_set)
+function [c, s, active_set] = oasisAR2(y, g, lam, smin, T_over_ISI, jitter, active_set)
 %% Infer the most likely discretized spike train underlying an AR(2) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g1*c_{t-1}-g2*c_{t-2} >=s_min or =0
@@ -33,8 +33,11 @@ function [c, s, active_set] = oasisAR2(y, g1, g2, lam, smin, T_over_ISI, jitter,
 %% initialization
 y = reshape(y, [], 1);
 if ~exist('g', 'var') || isempty(g)
-    g = estimate_time_constant(y);
+    g = estimate_time_constant(y, 2);
 end
+g1 = g(1); 
+g2 = g(2); 
+
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
 if ~exist('smin', 'var') || isempty(smin);   smin = 0; end
 if ~exist('T_over_ISI', 'var') || isempty(T_over_ISI)
