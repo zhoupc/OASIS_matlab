@@ -1,4 +1,4 @@
-function [c, s, b, kernel, lambda] = deconvolveCa(y, varargin)
+function [c, s, options] = deconvolveCa(y, varargin)
 %% infer the most likely discretized spike train underlying an fluorescence trace
 %% Solves mutliple formulation of the problem
 %  1) FOOPSI,
@@ -40,7 +40,7 @@ function [c, s, b, kernel, lambda] = deconvolveCa(y, varargin)
 %       optimize_b:     estimate the baseline. default: 0
 %       lambda:     penalty parameter
 %       method: methods for running deconvolution. {'foopsi',
-%       'constrained_foopsi' (default), 'threshold'},
+%       'constrained_foopsi' (default), 'thresholded'},
 
 %% outputs:
 %   c: T x 1 vector, denoised trace
@@ -61,7 +61,7 @@ function [c, s, b, kernel, lambda] = deconvolveCa(y, varargin)
 y = reshape(y, [], 1);  % reshape the trace as a vector
 T = length(y);          % length of y
 options = parseinputs(varargin{:});     % parse input arguments
-win = options.window;   % length of the convolution kernel 
+win = options.window;   % length of the convolution kernel
 % estimate the noise
 if isempty(options.sn)
     options.sn = GetSn(y);
@@ -89,60 +89,63 @@ if isempty(options.pars)
 end
 
 %% run deconvolution
-c = y; 
-s = y; 
+c = y;
+s = y;
 switch lower(options.method)
-    case 'foopsi'  %% use FOOPSI 
+    case 'foopsi'  %% use FOOPSI
         if strcmpi(options.type, 'ar1')  % AR 1
-            [c, s] = oasisAR1(y-options.b, options.pars, options.lambda); 
-            c = c + options.b; 
+            [c, s] = oasisAR1(y-options.b, options.pars, options.lambda);
         elseif strcmpi(options.type, 'ar2') % AR 2
-            [c, s] = oasisAR2(y-options.b, options.pars, options.lambda); 
+            [c, s] = oasisAR2(y-options.b, options.pars, options.lambda);
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
-            d = options.pars(1); 
-            r = options.pars(2); 
+            d = options.pars(1);
+            r = options.pars(2);
             options.pars = (exp(log(d)*(1:win)) - exp(log(r)*(1:win))) / (d-r); % convolution kernel
             [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
-                options.shift, options.window); 
-            c = c + options.b; 
+                options.shift, options.window);
         elseif strcmpi(options.type, 'kernel') % convolution kernel itself
             [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
-                options.shift, options.window); 
-            c = c + options.b; 
+                options.shift, options.window);
         else
             disp('to be done');
         end
     case 'constrained'
-        disp('to be done');
-    case 'threshold'  %% Use hard-shrinkage method 
+        if strcmpi(options.type, 'ar1')  % AR1
+            [c, s, options.b, options.pars, options.lambda] = constrained_oasisAR1(y,...
+                options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+                [], options.maxIter);
+        else
+            disp('to be done');
+        end
+    case 'thresholded'  %% Use hard-shrinkage method
         if strcmpi(options.type, 'ar1')
-            [c, s] = oasisAR1(y-options.b, options.pars, options.lambda, ...
-              options.smin); 
-            c = c + options.b; 
+            if and(options.smin==0, options.optimize_smin) % smin is given
+                [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
+                    options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+                    [], options.maxIter, options.thresh_factor);
+            else
+                [c, s] = oasisAR1(y-options.b, options.pars, options.lambda, ...
+                    options.smin);
+            end
         elseif strcmpi(options.type, 'ar2')
             [c, s] = oasisAR2(y-options.b, options.pars, options.lambda, ...
-                options.smin);         
+                options.smin);
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
-            d = options.pars(1); 
-            r = options.pars(2); 
+            d = options.pars(1);
+            r = options.pars(2);
             options.pars = (exp(log(d)*(1:win)) - exp(log(r)*(1:win))) / (d-r); % convolution kernel
             [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
-                options.shift, options.window, [], [], [], options.smin); 
-            c = c + options.b; 
+                options.shift, options.window, [], [], [], options.smin);
         elseif strcmpi(options.type, 'kernel') % convolution kernel itself
             [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
-                options.shift, options.window, [], [], [], options.smin); 
-            c = c + options.b; 
+                options.shift, options.window, [], [], [], options.smin);
         else
             disp('to be done');
         end
 end
 %%
-b = options.b;
-
-lambda = options.lambda; 
-kernel.type = options.type; 
-kernel.pars = options.pars; 
+kernel.type = options.type;
+kernel.pars = options.pars;
 
 function options=parseinputs(varargin)
 %% parse input variables
@@ -152,13 +155,16 @@ options.type = 'ar2';
 options.pars = [];
 options.sn = [];
 options.b = 0;
-options.lambda = 0; 
+options.lambda = 0;
 options.optimize_b = false;
 options.optimize_pars = false;
+options.optimize_smin = false;
 options.method = 'constrained';
 options.window = 200;
-options.shift = 100; 
-options.smin = 0; 
+options.shift = 100;
+options.smin = 0;
+options.maxIter = 10;
+options.thresh_factor = 1.0;
 
 %% parse all input arguments
 k = 1;
@@ -191,16 +197,20 @@ while k<=nargin
             k = k+1;
         case 'optimize_pars'
             % optimize the parameters of the convolution kernel
-            optioins.optimize_pars = true;
+            options.optimize_pars = true;
+            k = k+1;
+        case 'optimize_smin'
+            % optimize the parameters of the convolution kernel
+            options.optimize_smin = true;
             k = k+1;
         case 'lambda'
             % penalty
             options.lambda = varargin{k+1};
             k = k+2;
-        case {'foopsi', 'constrained', 'threshold'}
+        case {'foopsi', 'constrained', 'thresholded'}
             % method for running the deconvolution
             options.method = lower(varargin{k});
-            k = k+1; 
+            k = k+1;
         case 'window'
             % maximum length of the kernel
             options.window = varargin{k+1};
@@ -208,13 +218,25 @@ while k<=nargin
         case 'shift'
             % number of frames by which to shift window from on run of NNLS
             % to the next
-            options.shift = varargin{k+1}; 
+            options.shift = varargin{k+1};
             k = k+2;
         case 'smin'
             % number of frames by which to shift window from on run of NNLS
             % to the next
             options.smin = varargin{k+1};
             k = k+2;
+        case 'maxiter'
+            % number of frames by which to shift window from on run of NNLS
+            % to the next
+            options.maxIter = varargin{k+1};
+            k = k+2;
+        case 'thresh_factor'
+            % number of frames by which to shift window from on run of NNLS
+            % to the next
+            options.thresh_factor = varargin{k+1};
+            k = k+2;
+        otherwise
+            k = k+1;
     end
 end
 

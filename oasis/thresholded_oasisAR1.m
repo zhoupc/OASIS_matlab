@@ -1,5 +1,5 @@
-function [c, s, b, g, lam, active_set] = constrained_oasisAR1(y, g, sn, optimize_b,...
-    optimize_g, decimate, maxIter)
+function [c, s, b, g, smin, active_set] = thresholded_oasisAR1(y, g, sn, optimize_b,...
+    optimize_g, decimate, maxIter, thresh_factor)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >=s_min or =0
@@ -17,13 +17,14 @@ function [c, s, b, g, lam, active_set] = constrained_oasisAR1(y, g, sn, optimize
 %       on decimated data
 %   maxIter:  int, maximum number of iterations
 %   active_set: npool x 4 matrix, warm stared active sets
+%  thresh_factor: scalar, set the maximum thresh as thresh_factor*sn^2*T
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
 %   s: T*1 vector, discetized deconvolved neural activity (spikes)
 %   b: scalar, fluorescence baseline
 %   g: scalar, parameter of the AR(1) process
-%   lam: scalar, sparsity penalty parameter
+%   smin: scalar, minimum nonzero spike count 
 %   active_set: npool x 4 matrix, active sets
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
@@ -58,9 +59,12 @@ end
 if ~exist('maxIter', 'var') || isempty(maxIter)
     maxIter = 10;
 end
+if ~exist('thresh_factor', 'var') || isempty(thresh_factor)
+    thresh_factor = 1.0;
+end
 
-thresh = sn * sn * T;
-lam = 0;
+thresh = thresh_factor* sn * sn * T;
+smin = 0;
 
 % change parameters due to downsampling
 if decimate>1
@@ -76,39 +80,42 @@ g_converged = false;
 
 %% optimize parameters
 tol = 1e-4;
-flag_lam = true;
 if ~optimize_b   %% don't optimize the baseline b
     %% initialization
     b = 0;
-    [solution, spks, active_set] = oasisAR1(y, g, lam);
-    
+    [solution, spks, active_set] = oasisAR1(y, g, [], smin);
+            len_active_set = size(active_set, 1); 
+
     %% iteratively update parameters lambda & g
     for miter=1:maxIter
         res = y - solution;
         RSS = res' * res;
-        len_active_set = size(active_set, 1); 
-        if or(abs(RSS-thresh) < tol, ~flag_lam)  % constrained form has been found, stop
+        if or(RSS>thresh, sum(solution)<1e-9)  % constrained form has been found, stop
             break;
         else
             % update lam
-            update_phi; 
-            lam = lam + dphi; 
+            [smin, solution, spks, active_set] = update_smin(y, g, smin,...
+                solution, spks, active_set, sqrt(thresh)); 
       
             % update g
             if and(optimize_g, ~g_converged);
                 g0 = g;
-                [solution, active_set, g, spks] = update_g(y, active_set,lam);
-                if abs(g-g0)/g0 < 1e-4  % g is converged
+                [solution, active_set, g, spks] = update_g(y, active_set,smin);
+                if abs(g-g0)/g0 < 1e-3 % g is converged
                     g_converged = true;
                 end
+            end
+            
+            % no more change of the active set 
+            if size(active_set,1)==len_active_set
+                break; 
             end
         end
     end
 else
     %% initialization
     b = quantile(y, 0.15); 
-    [solution, spks, active_set] = oasisAR1(y-b, g, lam);
-    update_lam_b; 
+    [solution, spks, active_set] = oasisAR1(y-b, g, [], smin);
     
     %% optimize the baseline b and dependends on the optimized g too
     g_converged = false;
@@ -120,10 +127,11 @@ else
         if or(abs(RSS-thresh) < tol, sum(solution)<1e-9)
             break;
         else
-            %% update b & lamba
-            update_phi();
-            update_lam_b();
-                        % update b and g    
+            % update smin
+            [smin, solution, spks, active_set] = update_smin(y-b, g, smin,...
+                solution, spks, active_set, sqrt(thresh)); 
+            b = mean(y-solution); 
+            
             % update b and g
             if and(optimize_g, ~g_converged);
                 g0 = g;
@@ -140,65 +148,46 @@ end
 c = solution;
 s = spks;
 
-%% nested functions 
-    function update_phi()  % estimate dphi to match the thresholded RSS
-        zeta = zeros(size(solution));
-        maxl = max(active_set(:, 4));
-        h = g.^(0:maxl);
-        for ii=1:len_active_set
-            ti = active_set(ii, 3);
-            li = active_set(ii, 4);
-            idx = 0:(li-1);
-            if ii<len_active_set
-                zeta(ti+idx) = (1-g^li)/ active_set(ii,2) * h(1:li);
-            else
-                zeta(ti+idx) = 1/active_set(ii,2) * h(1:li);
-            end
-        end
-        
-        if optimize_b
-            zeta = zeta - mean(zeta);
-            tmp_res = res - mean(res);
-            aa = zeta' * zeta;
-            bb = tmp_res' * zeta;
-            cc = tmp_res'*tmp_res - thresh;
-            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
-        else
-            aa = zeta'*zeta;
-            bb = res'*zeta;
-            cc = RSS-thresh;
-            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
-        end
-        if imag(dphi)>1e-9
-            flag_phi = false; 
-            return; 
-        else
-            flag_phi = true; 
-        end
-        active_set(:,1) = active_set(:,1) - dphi*(1-g.^active_set(:,4));
-        [solution, spks, active_set] = oasisAR1([], g, lam, [], active_set);
+%% nested functions
+    function [smin, solution, spks, active_set] = update_smin(y, g, smin, solution, ...
+            spks, active_set, thresh) 
+         %%estimate smin to match the thresholded RSS 
+         len_active_set = size(active_set, 1); 
+         s_max = max(active_set(:,1)./active_set(:,2)); 
+         sv = linspace(smin, s_max, min(9, len_active_set));
+         ind_start = 1;
+         ind_end = length(sv);
+         
+         while (ind_end-ind_start)>1
+             ind = floor((ind_start+ind_end)/2);
+             tmp_smin = sv(ind);
+             [tmp_solution, tmp_spks, tmp_active_set] = oasisAR1([], g, [], ...
+                 tmp_smin, active_set);
+             sqRSS = norm(y-tmp_solution,2);
+             if sqRSS<thresh % increase smin
+                 solution = tmp_solution; 
+                 spks = tmp_spks; 
+                 active_set = tmp_active_set; 
+                 smin = tmp_smin; 
+                 ind_start = ind;
+             elseif sqRSS>thresh % decrease smin
+                 ind_end = ind; 
+             else
+                 break; 
+             end
+         end
     end
 
-    function update_lam_b() % estimate lambda  & b
-        db = mean(y-solution) - b;
-        b = b + db;
-        dlam = -db/(1-g);
-        
-        lam = lam + dlam;
-        % correct the last pool
-        active_set(end,1) = active_set(end,1) - lam*g^(active_set(end,4));
-        ti = active_set(end,3); li = active_set(end,4); idx = 0:(li-1);
-        solution(ti+idx) = max(0, active_set(end,1)/active_set(end,2)) * (g.^idx);
-    end
 
 end
+
  %update the AR coefficient: g
-function [c, active_set, g, s] = update_g(y, active_set, lam)
+function [c, active_set, g, s] = update_g(y, active_set, smin)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
 %   active_set: npools*4 matrix, previous active sets.
-%   lam:  scalar, curret value of sparsity penalty parameter lambda.
+% smin: scalr, minimize size of nonzero spikes 
 
 %% outputs
 %   c: T*1 vector
@@ -221,7 +210,7 @@ c = zeros(size(y));     % the optimal denoised trace
 
 %% find the optimal g and get the warm started active_set
 g = fminbnd(@rss_g, 0, 1);
-yp = y - lam*(1-g);
+yp = y; 
 for m=1:len_active_set
     tmp_h = exp(log(g)*(0:maxl)');   % response kernel
     tmp_hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
@@ -231,13 +220,13 @@ for m=1:len_active_set
     active_set(m,1) = (yp(idx))'*tmp_h(1:li);
     active_set(m,2) = tmp_hh(li);
 end
-[c,s,active_set] = oasisAR1(y, g, lam, [], active_set);
+[c,s,active_set] = oasisAR1(y, g, 0, smin, active_set);
 
 %% nested functions
     function rss = rss_g(g)
         h = exp(log(g)*(0:maxl)');   % response kernel
         hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
-        yp = y - lam*(1-g);     % include the penalty term
+        yp = y;     % include the penalty term
         for ii=1:len_active_set
             li = active_set(ii, 4);
             ti = active_set(ii, 3);
