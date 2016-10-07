@@ -16,20 +16,33 @@ seed = 13;          % seed for genrating random variables
 % case 1: all parameters are known 
 lambda = 2.4; 
 [c_oasis, s_oasis] = deconvolveCa(y, 'ar1', g, 'foopsi', 'lambda', lambda);  %#ok<*ASGLU>
+[c_cvx, s_cvx] = foopsi(y, g, lambda); 
 
 figure('name', 'FOOPSI, AR1, known: g, lambda', 'papersize', [15, 4]); 
+plot_cvx = true; 
 show_results; 
+plot_cvx = false; 
 
 % case 2: know lambda
 lambda = 2.4; 
-[c_oasis, s_oasis, ~, kernel] = deconvolveCa(y, 'ar1', 'foopsi', 'lambda', lambda); 
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', 'foopsi', 'lambda', lambda); 
 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
 
 figure('name', 'FOOPSI, AR1, known:lambda, estimated: g', 'papersize', [15, 4]); 
 show_results; 
 
+% case 3: know lambda, fit g
+lambda = 2.4; 
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', 'foopsi', 'lambda', lambda, ...
+    'optimize_pars'); 
+
+fprintf('true gamma:        %.3f\n', g); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
+
+figure('name', 'FOOPSI, AR1, known:lambda, estimated:b, g, updated: b, g', 'papersize', [15, 4]); 
+show_results; 
 %%%%%%%%%%%%%%  END %%%%%%%%%%%%%%%%%%
 
 %% example 2: foopsi, AR2 model 
@@ -54,10 +67,10 @@ show_results;
 
 % case 2: know lambda
 lambda = 2.5; 
-[c_oasis, s_oasis, ~, kernel] = deconvolveCa(y, 'ar2', 'sn', noise, 'foopsi', 'lambda',...
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar2', 'sn', noise, 'foopsi', 'lambda',...
     lambda); 
 fprintf('true gamma:        %.3f\t %.3f\n', g(1), g(2)); 
-fprintf('estimated gamma:   %.3f\t %.3f\n', kernel.pars(1),  kernel.pars(2)); 
+fprintf('estimated gamma:   %.3f\t %.3f\n', options.pars(1),  options.pars(2)); 
 
 figure('name', 'FOOPSI, AR2, known:lambda, estimated: g', 'papersize', [15, 4]); 
 show_results; 
@@ -113,7 +126,7 @@ seed = 13;          % seed for genrating random variables
 [y, true_c, true_s] = gen_data(g, noise, T, framerate, firerate, b, N, seed); 
 
 % case 1: all parameters are known 
-smin = options.smin; 
+smin = 0.5; 
 [c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', g, 'thresholded', 'smin', smin);  %#ok<*ASGLU>
 
 figure('name', 'threshold, AR1, known: g, lambda, smin', 'papersize', [15, 4]); 
@@ -123,20 +136,20 @@ show_results;
 [c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', 'thresholded', 'smin', smin); 
 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
 
 figure('name', 'threshold, AR1, known:lambda, estimated: g', 'papersize', [15, 4]); 
 show_results; 
 
-%% case 5: optimize the thershold, g, and the baseline
+% case 5: optimize the thershold, g, and the baseline
 [c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', g,  ...
     'thresholded', 'optimize_smin', 'optimize_pars', 'thresh_factor', 0.99);  %#ok<*ASGLU>
 
 figure('name', 'threshold, AR1, known: g, sn, estimate: smin', 'papersize', [15, 4]); 
 show_results; 
 
-%% case 6: optimize the thershold, g, and the baseline
-[c_oasis, s_oasis, options] = deconvolveCa(y+0.5, 'ar1', g,  ...
+% case 6: optimize the thershold, g, and the baseline
+[c_oasis, s_oasis, options] = deconvolveCa(y+1, 'ar1', g,  ...
     'thresholded', 'optimize_smin', 'optimize_pars', 'thresh_factor', .97, ...
     'optimize_b');  %#ok<*ASGLU>
 
@@ -162,20 +175,28 @@ true_c = trueC(1,:);  %#ok<*NASGU>
 true_s = trueS(1,:); 
 % case 1: all parameters are known 
 smin = 0.5; 
-[c_oasis, s_oasis] = deconvolveCa(y, 'ar2', g, 'threshold', 'smin', smin);  %#ok<*ASGLU>
+[c_oasis, s_oasis] = deconvolveCa(y, 'ar2', g, 'thresholded', 'smin', smin);  %#ok<*ASGLU>
 figure('name', 'threshold, AR2, known: g, smin', 'papersize', [15, 4]); 
 show_results; 
 
 % case 2: know smin
 smin = 0.5; 
-[c_oasis, s_oasis, ~, kernel] = deconvolveCa(y, 'ar2', 'sn', noise, 'threshold',...
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar2', 'sn', noise, 'thresholded',...
     'smin', smin); 
 fprintf('true gamma:        %.3f\t %.3f\n', g(1), g(2)); 
-fprintf('estimated gamma:   %.3f\t %.3f\n', kernel.pars(1),  kernel.pars(2)); 
+fprintf('estimated gamma:   %.3f\t %.3f\n', options.pars(1),  options.pars(2)); 
 
 figure('name', 'threshold, AR2, known:smin, estimated: g', 'papersize', [15, 4]); 
 show_results; 
 
+%% case 3: estimate smin 
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar2', 'sn', noise, 'thresholded',...
+    'optimize_smin','optimize_pars', 'thresh_factor', 1); 
+% fprintf('true gamma:        %.3f\t %.3f\n', g(1), g(2)); 
+% fprintf('estimated gamma:   %.3f\t %.3f\n', options.pars(1),  options.pars(2)); 
+fprintf('estimated smin:    %.3f\n', options.smin); 
+figure('name', 'threshold, AR2, known:smin, estimated: g', 'papersize', [15, 4]); 
+show_results; 
 %%%%%%%%%%%%%%  END %%%%%%%%%%%%%%%%%%
 
 %% example 6: threshold, convolution kernel  
@@ -191,7 +212,7 @@ seed = 3;          % seed for genrating random variables
 y = Y(1,:); 
 true_c = trueC(1,:);  %#ok<*NASGU>
 true_s = trueS(1,:); 
-temp = roots([1, -g(1), -g(2)]);d = max(temp);
+temp = roots([1, -g(1), -g(2)]);
 d = max(temp); 
 r = min(temp);
 w = 200;
@@ -200,13 +221,13 @@ ht = (exp(log(d)*(1:w)) - exp(log(r)*(1:w))) / (d-r); % convolution kernel
 % case 1: all parameters are known 
 smin = 0.5; 
 pars = [d, r]; 
-[c_oasis, s_oasis] = deconvolveCa(y, 'exp2', pars, 'threshold', 'smin', smin);  %#ok<*ASGLU>
+[c_oasis, s_oasis] = deconvolveCa(y, 'exp2', pars, 'thresholded', 'smin', smin);  %#ok<*ASGLU>
 figure('name', 'threshold, exp2, known: taur, taud, smin', 'papersize', [15, 4]); 
 show_results; 
 
 % case 1: all parameters are known 
 smin = 0.5; 
-[c_oasis, s_oasis] = deconvolveCa(y, 'kernel', ht, 'threshold', 'smin', smin);  %#ok<*ASGLU>
+[c_oasis, s_oasis] = deconvolveCa(y, 'kernel', ht, 'thresholded', 'smin', smin);  %#ok<*ASGLU>
 figure('name', 'threshold, kernel, known: kernel, smin', 'papersize', [15, 4]); 
 show_results; 
 %%%%%%%%%%%%%%  END %%%%%%%%%%%%%%%%%%
@@ -230,23 +251,24 @@ seed = 13;          % seed for genrating random variables
 figure('name', 'constrained-FOOPSI, AR1, known: g, sn', 'papersize', [15, 4]);
 plot_cvx = true; 
 show_results; 
+plot_cvx = false; 
 
 % case 2: nothing is known, estimate g with auto-correlation method
-[c_oasis, s_oasis, ~, kernel, lambda] = deconvolveCa(y, 'ar1', 'constrained'); 
+[c_oasis, s_oasis,options] = deconvolveCa(y, 'ar1', 'constrained'); 
 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
 
 figure('name', 'FOOPSI, AR1, estimated: g, sn', 'papersize', [15, 4]); 
 show_results; 
 
 % case 3: nothing is know, estimate g with auto-correlation method first
 % and then update it to minimize the RSS
-[c_oasis, s_oasis, ~, kernel] = deconvolveCa(y, 'ar1', 'constrained', ...
+[c_oasis, s_oasis, options] = deconvolveCa(y, 'ar1', 'constrained', ...
     'optimize_pars'); 
 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
 
 figure('name', 'FOOPSI, AR1, estimated: g, sn, update:g', 'papersize', [15, 4]); 
 show_results; 
@@ -254,12 +276,13 @@ show_results;
 % case 4: nothing is know, estimate g with auto-correlation method first
 % and then update it to minimize the RSS, the baseline is also unknown
 true_b = 0.5; 
-[c_oasis, s_oasis, b, kernel, lambda] = deconvolveCa(y+true_b, 'ar1', g,...
+[c_oasis, s_oasis, options] = deconvolveCa(y+true_b, 'ar1', g,...
     'constrained','optimize_b', 'sn', noise); 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
-fprintf('estimated b:       %.3f\n', b); 
-fprintf('tuning parameter:  %.3f\n', lambda); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
+fprintf('true b:       %.3f\n', true_b); 
+fprintf('estimated b:       %.3f\n', options.b); 
+fprintf('tuning parameter:  %.3f\n', options.lambda); 
 
 figure('name', 'FOOPSI, AR1, estimated: g, sn, lambda', 'papersize', [15, 4]); 
 show_results; 
@@ -267,12 +290,14 @@ show_results;
 % case 5: nothing is know, estimate g with auto-correlation method first
 % and then update it to minimize the RSS, the baseline is also unknown
 true_b = 0.5; 
-[c_oasis, s_oasis, b, kernel, lambda] = deconvolveCa(y+true_b, 'ar1',...
+[c_oasis, s_oasis, options] = deconvolveCa(y+true_b, 'ar1',...
     'constrained','optimize_b', 'optimize_pars'); 
 fprintf('true gamma:        %.3f\n', g); 
-fprintf('estimated gamma:   %.3f\n', kernel.pars); 
-fprintf('estimated b:       %.3f\n', b); 
-fprintf('tuning parameter:  %.3f\n', lambda); 
+fprintf('estimated gamma:   %.3f\n', options.pars); 
+fprintf('estimated b:       %.3f\n', options.b); 
+fprintf('tuning parameter:  %.3f\n', options.lambda); 
 
 figure('name', 'FOOPSI, AR1, estimated: g, sn, lambda, update:g', 'papersize', [15, 4]); 
 show_results; 
+
+%% 

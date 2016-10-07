@@ -1,23 +1,23 @@
-function [c, s, b, g, lam, active_set] = constrained_oasisAR2(y, g, sn,...
-    optimize_b, optimize_g, T_over_ISI, maxIter, smin)
-%% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
+function [c, s, b, g, lam, active_set] = constrained_oasisAR2(y, g, sn, optimize_b,...
+    optimize_g, decimate, maxIter)
+%% Infer the most likely discretized spike train underlying an AR(2) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
-%  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >=s_min or =0
+%  min lam |s|_1
+%  subject to |y-c|_2^2 <= sn^2*T
 
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
-%   g1:  scalar, the first parameter of the AR(2) process that models the fluorescence ...
-%impulse response.%
-%   g2:  scalar, the second parameter of the AR(2) process that models the fluorescence ...
+%   g:  2 x 1 vector, Parameter of the AR(2) process that models the fluorescence ...
 %impulse response.
 %   sn:  scalar, standard deviation of the noise distribution
 %   optimize_b: bool, optimize baseline if True
 %   optimize_g: integer, number of large, isolated events to consider for
 %       optimizing g
-%   T_over_ISI: int, T/ISI
+%   decimate: int, decimation factor for estimating hyper-parameters faster
+%       on decimated data
 %   maxIter:  int, maximum number of iterations
-%   smin: scalar, minimize spike size
+%   active_set: npool x 4 matrix, warm stared active sets
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
@@ -51,6 +51,11 @@ end
 if ~exist('optimize_g', 'var') || isempty(optimize_g)
     optimize_g = 0;
 end
+if ~exist('decimate', 'var') || isempty(decimate)
+    decimate = 1;
+else
+    decimate = max(1, round(decimate));
+end
 if ~exist('maxIter', 'var') || isempty(maxIter)
     maxIter = 10;
 end
@@ -58,193 +63,190 @@ end
 thresh = sn * sn * T;
 lam = 0;
 
-g_converged = false;
-
-%% initialize the active_set
-b = 0;
-[solution, spks, active_set] = oasisAR2(y, g, lam);
-len_active_set = size(active_set,1);
-
-if optimize_b
-    % update b and lam
-    b_new = mean(y-solution);
-    db = b_new - b;
-    lam = -db / (1-g);
-    b = b_new;
-    % correct the last pool
-    active_set(end,1) = active_set(end,1) - lam*g^(active_set(end,4));
-    ti = active_set(end,3); li = active_set(end,4); idx = 0:(li-1);
-    solution(ti+idx) = max(0, active_set(end,1)/active_set(end,2)) * (g.^idx);
+% change parameters due to downsampling
+if decimate>1
+    decimate = 1;  %#ok<NASGU>
+    disp('to be done');
+    %     fluo = y;
+    %     y = resample(y, 1, decimate);
+    %     g = g^decimate;
+    %     thresh = thresh / decimate / decimate;
+    %     T = length(y);
 end
+g_converged = false;
 
 %% optimize parameters
 tol = 1e-4;
 flag_lam = true;
-if ~optimize_b
-    %% don't optimize b nor g, just the dual variable lambda
+if ~optimize_b   %% don't optimize the baseline b
+    %% initialization
+    b = 0;
+    [solution, spks, active_set] = oasisAR2(y, g, lam);
+    
+    %% iteratively update parameters lambda & g
     for miter=1:maxIter
         res = y - solution;
         RSS = res' * res;
+        len_active_set = size(active_set, 1); 
         if or(abs(RSS-thresh) < tol, ~flag_lam)  % constrained form has been found, stop
             break;
         else
             % update lam
-            [solution, active_set, lam, spks, flag_lam] = update_lam(y, solution, ...
-                active_set, g, lam, thresh);
-            
+            update_phi; 
+            lam = lam + dphi; 
+      
             % update g
             if and(optimize_g, ~g_converged);
                 g0 = g;
-                [solution, active_set, g, spks] = update_g(y, active_set, g, lam);
-                if abs(g-g0)/g0 < 1e-4; g_converged = true; end
+                [solution, active_set, g, spks] = update_g(y, active_set,lam);
+                if abs(g-g0)/g0 < 1e-3  % g is converged
+                    g_converged = true;
+                end
             end
         end
     end
 else
+    %% initialization
+    b = quantile(y, 0.15); 
+    [solution, spks, active_set] = oasisAR2(y-b, g, lam);
+    update_lam_b; 
+    
     %% optimize the baseline b and dependends on the optimized g too
-    % run iterations until the noise constraint is tight or spike train is
-    % empty or maxIter reached.
+    g_converged = false;
     for miter=1:maxIter
-        res = y - solution;
+        res = y - solution - b;
         RSS = res' * res;
+        len_active_set = size(active_set,1);
+        
         if or(abs(RSS-thresh) < tol, sum(solution)<1e-9)
             break;
-        end
-        
-        % update b and g
-        update_b_lam();
-        
-        % update b and g
-        if and(optimize_g, ~g_converged);
-            g0 = g;
-            update_b_g();
-            if abs(g-g0)/g0 < 1e-4;
-                g_converged = true;
+        else
+            %% update b & lamba
+            update_phi();
+            update_lam_b();
+                        % update b and g    
+            % update b and g
+            if and(optimize_g, ~g_converged);
+                g0 = g;
+                [solution, active_set, g, spks] = update_g(y-b, active_set,lam);       
+                if abs(g-g0)/g0 < 1e-4;
+                    g_converged = true;
+                end
             end
+
         end
     end
+    
 end
-
 c = solution;
 s = spks;
 
-%% nested functions
-    function update_b_lam()
-        %% update total shift dphi due to contribution of baseline and labda
-        temp = zeros(size(solution));
+%% nested functions 
+    function update_phi()  % estimate dphi to match the thresholded RSS
+        zeta = zeros(size(solution));
         maxl = max(active_set(:, 4));
         h = g.^(0:maxl);
-        tmp_sum = 0;
         for ii=1:len_active_set
             ti = active_set(ii, 3);
             li = active_set(ii, 4);
             idx = 0:(li-1);
             if ii<len_active_set
-                temp(ti+idx) = (1-g^li)/ active_set(ii,2) * h(1:li);
-                tmp_sum = tmp_sum + (1-g^li).^2 / active_set(ii,2);
+                zeta(ti+idx) = (1-g^li)/ active_set(ii,2) * h(1:li);
             else
-                temp(ti+idx) = 1/active_set(ii,2) * h(1:li);
-                tmp_sum = tmp_sum + 1.0 / active_set(ii,2);
+                zeta(ti+idx) = 1/active_set(ii,2) * h(1:li);
             end
         end
-        temp = temp - tmp_sum/T/((1-g));
         
-        res = y - solution - mean(y-solution);
-        aa = temp'*temp;
-        bb = res'*temp;
-        cc = RSS-thresh;
-        dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
-        if imag(dphi)~=0
-            return;
+        if optimize_b
+            zeta = zeta - mean(zeta);
+            tmp_res = res - mean(res);
+            aa = zeta' * zeta;
+            bb = tmp_res' * zeta;
+            cc = tmp_res'*tmp_res - thresh;
+            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
+        else
+            aa = zeta'*zeta;
+            bb = res'*zeta;
+            cc = RSS-thresh;
+            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
         end
-        b = b + dphi * (1-g);
-        
-        % perform shift
+        if imag(dphi)>1e-9
+            flag_phi = false; 
+            return; 
+        else
+            flag_phi = true; 
+        end
         active_set(:,1) = active_set(:,1) - dphi*(1-g.^active_set(:,4));
+        [solution, spks, active_set] = oasisAR2([], g, lam, [], active_set);
+    end
+
+    function update_lam_b() % estimate lambda  & b
+        db = mean(y-solution) - b;
+        b = b + db;
+        dlam = -db/(1-g);
         
-        % run OASIS
-        [solution, spks, active_set] = oasisAR1(y, g, [], [], active_set);
-        len_active_set = size(active_set,1);
-        
-        % update b and lam
-        b_new = mean(y-solution);
-        db = b_new - b;
-        dlam = -db / (1-g);
         lam = lam + dlam;
-        b = b_new;
-        
-        %% correct the last pool
         % correct the last pool
         active_set(end,1) = active_set(end,1) - lam*g^(active_set(end,4));
         ti = active_set(end,3); li = active_set(end,4); idx = 0:(li-1);
         solution(ti+idx) = max(0, active_set(end,1)/active_set(end,2)) * (g.^idx);
-        len_active_set = size(active_set,1);
     end
 
-    function update_b_g()
-        %% update  b and g
-        %% initialization
-        maxl = max(active_set(:, 4));   % maximum ISI
-        c = zeros(size(y));     % the optimal denoised trace
-        
-        %% find the optimal g and get the warm started active_set
-        g = fminbnd(@rss_b_g, 0, 1);
+end
+ %update the AR coefficient: g
+function [c, active_set, g, s] = update_g(y, active_set, lam)
+%% inputs:
+%   y:  T*1 vector, One dimensional array containing the fluorescence intensities
+%withone entry per time-bin.
+%   active_set: npools*4 matrix, previous active sets.
+%   lam:  scalar, curret value of sparsity penalty parameter lambda.
+
+%% outputs
+%   c: T*1 vector
+%   s: T*1 vector, spike train
+%   active_set: npool x 4 matrix, active sets
+%   g: scalar
+
+%% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
+% ported from the Python implementation from Johannes Friedrich
+
+%% References
+% Friedrich J et.al., NIPS 2016, Fast Active Set Method for Online Spike Inference from Calcium Imaging
+
+%% initialization
+
+len_active_set = size(active_set, 1);  %number of active sets
+y = reshape(y,[],1);    % fluorescence data
+maxl = max(active_set(:, 4));   % maximum ISI
+c = zeros(size(y));     % the optimal denoised trace
+
+%% find the optimal g and get the warm started active_set
+g = fminbnd(@rss_g, 0, 1);
+yp = y - lam*(1-g);
+for m=1:len_active_set
+    tmp_h = exp(log(g)*(0:maxl)');   % response kernel
+    tmp_hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
+    li = active_set(m, 4);
+    ti = active_set(m, 3);
+    idx = ti:(ti+li-1);
+    active_set(m,1) = (yp(idx))'*tmp_h(1:li);
+    active_set(m,2) = tmp_hh(li);
+end
+[c,s,active_set] = oasisAR2(y, g, lam, [], active_set);
+
+%% nested functions
+    function rss = rss_g(g)
         h = exp(log(g)*(0:maxl)');   % response kernel
-        hs = cumsum(h);
         hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
-        yh = zeros(len_active_set,1);
+        yp = y - lam*(1-g);     % include the penalty term
         for ii=1:len_active_set
             li = active_set(ii, 4);
             ti = active_set(ii, 3);
             idx = ti:(ti+li-1);
-            if ii<len_active_set
-                yh(ii) = (y(idx)-lam*(1-g))' * h(1:li);
-            else
-                yh(ii) = (y(idx)-lam)' * h(1:li);
-            end
+            tmp_v = max(yp(idx)' * h(1:li) / hh(li), 0);
+            c(idx) = tmp_v*h(1:li);
         end
-        aa = hs(active_set(:, 4));
-        bb = hh(active_set(:, 4));
-        b = (sum(yh) - sum(yh.*aa./bb)) / (length(y)-sum(aa.*aa./bb));
-        active_set(:,1) = (yh-b*aa)./bb;
-        
-        [c,s,active_set] = oasisAR1(y, g, lam, [], active_set);
-        len_active_set = size(active_set,1);
-        
-        function rss = rss_b_g(g)
-            h = exp(log(g)*(0:maxl)');   % response kernel
-            hs = cumsum(h);
-            hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)
-            yh = zeros(len_active_set,1);
-            for iii=1:len_active_set
-                li = active_set(iii, 4);
-                ti = active_set(iii, 3);
-                idx = ti:(ti+li-1);
-                
-                if iii<len_active_set
-                    yh(iii) = (y(idx)-lam*(1-g))' * h(1:li);
-                else
-                    yh(iii) = (y(idx)-lam)' * h(1:li);
-                end
-            end
-            aa = hs(active_set(:, 4));
-            bb = hh(active_set(:, 4));
-            tmp_b = (sum(yh) - sum(yh.*aa./bb)) / (length(y)-sum(aa.*aa./bb));
-            v = max(0, (yh-tmp_b*aa)./bb);
-            for jj=1:len_active_set
-                li = active_set(jj, 4);
-                ti = active_set(jj, 3);
-                idx = ti:(ti+li-1);
-                c(idx) = v(jj) * h(1:li);
-            end
-            res = y-c;
-            rss = res'*res;     % residual sum of squares
-        end
-        
+        res = y-c;
+        rss = res'*res;     % residual sum of squares
     end
 end
-
-
-
-
-

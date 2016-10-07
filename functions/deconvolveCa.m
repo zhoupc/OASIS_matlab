@@ -94,9 +94,10 @@ s = y;
 switch lower(options.method)
     case 'foopsi'  %% use FOOPSI
         if strcmpi(options.type, 'ar1')  % AR 1
-            [c, s] = oasisAR1(y-options.b, options.pars, options.lambda);
+            [c, s, options.b, options.g] = foopsi_oasisAR1(y-options.b, options.pars, options.lambda, ...
+                options.optimize_b, options.optimize_pars, [], options.maxIter);
         elseif strcmpi(options.type, 'ar2') % AR 2
-            [c, s] = oasisAR2(y-options.b, options.pars, options.lambda);
+            [c, s] = foopsi_oasisAR2(y-options.b, options.pars, options.lambda);
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
             d = options.pars(1);
             r = options.pars(2);
@@ -128,8 +129,14 @@ switch lower(options.method)
                     options.smin);
             end
         elseif strcmpi(options.type, 'ar2')
-            [c, s] = oasisAR2(y-options.b, options.pars, options.lambda, ...
-                options.smin);
+            if and(options.smin==0, options.optimize_smin) % smin is given
+                [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR2(y,...
+                    options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+                    [], options.maxIter, options.thresh_factor);
+            else
+                [c, s] = oasisAR2(y-options.b, options.pars, options.lambda, ...
+                    options.smin);
+            end           
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
             d = options.pars(1);
             r = options.pars(2);

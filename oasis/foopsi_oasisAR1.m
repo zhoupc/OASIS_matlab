@@ -1,15 +1,15 @@
-function [c, s, b, g, lam, active_set] = constrained_oasisAR1(y, g, sn, optimize_b,...
+function [c, s, b, g, active_set] = foopsi_oasisAR1(y, g, lam, optimize_b,...
     optimize_g, decimate, maxIter)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
-%  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >=s_min or =0
+%  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >= 0
 
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
 %   g:  scalar, Parameter of the AR(1) process that models the fluorescence ...
 %impulse response.
-%   sn:  scalar, standard deviation of the noise distribution
+%   lam:  scalar, sparsity penalty parameter
 %   optimize_b: bool, optimize baseline if True
 %   optimize_g: integer, number of large, isolated events to consider for
 %       optimizing g
@@ -23,7 +23,6 @@ function [c, s, b, g, lam, active_set] = constrained_oasisAR1(y, g, sn, optimize
 %   s: T*1 vector, discetized deconvolved neural activity (spikes)
 %   b: scalar, fluorescence baseline
 %   g: scalar, parameter of the AR(1) process
-%   lam: scalar, sparsity penalty parameter
 %   active_set: npool x 4 matrix, active sets
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
@@ -39,9 +38,6 @@ T = length(y);
 
 if ~exist('g', 'var') || isempty(g)
     g = estimate_time_constant(y, 1);
-end
-if ~exist('sn', 'var') || isempty(sn)
-    sn = GetSn(y);
 end
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
 if ~exist('optimize_b', 'var') || isempty(optimize_b)
@@ -59,9 +55,6 @@ if ~exist('maxIter', 'var') || isempty(maxIter)
     maxIter = 10;
 end
 
-thresh = sn * sn * T;
-lam = 0;
-
 % change parameters due to downsampling
 if decimate>1
     decimate = 1;  %#ok<NASGU>
@@ -72,127 +65,40 @@ if decimate>1
     %     thresh = thresh / decimate / decimate;
     %     T = length(y);
 end
-g_converged = false;
 
 %% optimize parameters
-tol = 1e-4;
-flag_lam = true;
 if ~optimize_b   %% don't optimize the baseline b
     %% initialization
     b = 0;
     [solution, spks, active_set] = oasisAR1(y, g, lam);
     
-    %% iteratively update parameters lambda & g
-    for miter=1:maxIter
-        res = y - solution;
-        RSS = res' * res;
-        len_active_set = size(active_set, 1); 
-        if or(abs(RSS-thresh) < tol, ~flag_lam)  % constrained form has been found, stop
-            break;
-        else
-            % update lam
-            update_phi; 
-            lam = lam + dphi; 
-      
-            % update g
-            if and(optimize_g, ~g_converged);
-                g0 = g;
-                [solution, active_set, g, spks] = update_g(y, active_set,lam);
-                if abs(g-g0)/g0 < 1e-3  % g is converged
-                    g_converged = true;
-                end
-            end
-        end
+    %% iteratively update parameters g
+    if  optimize_g     % update g
+        [solution, active_set, g, spks] = update_g(y, active_set,lam);
     end
 else
     %% initialization
-    b = quantile(y, 0.15); 
+    b = quantile(y, 0.15);
     [solution, spks, active_set] = oasisAR1(y-b, g, lam);
-    update_lam_b; 
     
-    %% optimize the baseline b and dependends on the optimized g too
-    g_converged = false;
-    for miter=1:maxIter
-        res = y - solution - b;
-        RSS = res' * res;
-        len_active_set = size(active_set,1);
-        
-        if or(abs(RSS-thresh) < tol, sum(solution)<1e-9)
-            break;
-        else
-            %% update b & lamba
-            update_phi();
-            update_lam_b();
-                        % update b and g    
-            % update b and g
-            if and(optimize_g, ~g_converged);
-                g0 = g;
-                [solution, active_set, g, spks] = update_g(y-b, active_set,lam);       
-                if abs(g-g0)/g0 < 1e-4;
-                    g_converged = true;
-                end
+    %% iteratively update parameters g and b
+    for m=1:maxIter
+        b = mean(y-solution);
+        if  optimize_g     % update g
+            g0 = g;
+            [solution, active_set, g, spks] = update_g(y-b, active_set,lam);
+            if abs(g-g0)/g0 < 1e-3  % g is converged
+                optimize_g = false;
             end
-
+        else
+            break;
         end
     end
-    
 end
 c = solution;
 s = spks;
-
-%% nested functions 
-    function update_phi()  % estimate dphi to match the thresholded RSS
-        zeta = zeros(size(solution));
-        maxl = max(active_set(:, 4));
-        h = g.^(0:maxl);
-        for ii=1:len_active_set
-            ti = active_set(ii, 3);
-            li = active_set(ii, 4);
-            idx = 0:(li-1);
-            if ii<len_active_set
-                zeta(ti+idx) = (1-g^li)/ active_set(ii,2) * h(1:li);
-            else
-                zeta(ti+idx) = 1/active_set(ii,2) * h(1:li);
-            end
-        end
-        
-        if optimize_b
-            zeta = zeta - mean(zeta);
-            tmp_res = res - mean(res);
-            aa = zeta' * zeta;
-            bb = tmp_res' * zeta;
-            cc = tmp_res'*tmp_res - thresh;
-            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
-        else
-            aa = zeta'*zeta;
-            bb = res'*zeta;
-            cc = RSS-thresh;
-            dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
-        end
-        if imag(dphi)>1e-9
-            flag_phi = false; 
-            return; 
-        else
-            flag_phi = true; 
-        end
-        active_set(:,1) = active_set(:,1) - dphi*(1-g.^active_set(:,4));
-        [solution, spks, active_set] = oasisAR1([], g, lam, [], active_set);
-    end
-
-    function update_lam_b() % estimate lambda  & b
-        db = mean(y-solution) - b;
-        b = b + db;
-        dlam = -db/(1-g);
-        
-        lam = lam + dlam;
-        % correct the last pool
-        active_set(end,1) = active_set(end,1) - lam*g^(active_set(end,4));
-        ti = active_set(end,3); li = active_set(end,4); idx = 0:(li-1);
-        solution(ti+idx) = max(0, active_set(end,1)/active_set(end,2)) * (g.^idx);
-    end
-
 end
- %update the AR coefficient: g
+%update the AR coefficient: g
 function [c, active_set, g, s] = update_g(y, active_set, lam)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities

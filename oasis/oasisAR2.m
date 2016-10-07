@@ -49,11 +49,11 @@ end
 
 %% initialization
 T = length(y);
+yp = y - lam * (1-g1-g2);
+yp(end-1) = y(end-1) - lam*(1-g1);
+yp(end) = y(end) - lam;
+
 if ~exist('active_set', 'var') || isempty(active_set)
-    yp = y - lam * (1-g1-g2);
-    yp(end-1) = y(end-1) - lam*(1-g1);
-    yp(end) = y(end) - lam;
-    
     % active set
     len_active_set = length(y);
     active_set = [yp, yp, (1:T)', ones(T,1), (1:T)'-1, (1:T)'+1];
@@ -67,7 +67,7 @@ end
 idx = true(len_active_set,1);
 
 % precompute
-len_g = len_active_set / T_over_ISI;
+len_g = T / T_over_ISI;
 temp = roots([1, -g1, -g2]);
 d = max(temp); r = min(temp);
 g11 = (exp(log(d)*(1:len_g)') - exp(log(r)*(1:len_g)')) / (d-r);
@@ -130,9 +130,9 @@ while ~isnan(ii_next)
 end
 
 %% jitter
-a_s = active_set;
+% a_s = active_set;
 if jitter
-    pause;
+    disp('to be done\n');
 end
 
 active_set(~idx, :) = [];
@@ -145,11 +145,9 @@ for ii=1:len_active_set
     ti = active_set(ii,3);
     li = active_set(ii,4);
     c(ti) = vi;
-    if li>1
-        c(ti+1) = g1*c(ti) + g2*a_s(ii_prev,2);
-        for m=2:li
-            c(ti+m-1) = g1*c(ti+m-2) + g2*c(ti+m-3);
-        end
+    
+    for m=1:(li-1)
+        c(ti+m) = g1*c(ti+m-1) + g2*c(ti+m-2);
     end
 end
 c(c<0) = 0;

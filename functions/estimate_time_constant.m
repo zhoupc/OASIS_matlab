@@ -29,7 +29,7 @@ if ~exist('lags', 'var') || isempty(lags)
     lags = 5;
 end
 if ~exist('fudge_factor', 'var') || isempty(fudge_factor)
-    fudge_factor = 1.0;
+    fudge_factor = 1;
 end
 
 %% estimate time constants 
