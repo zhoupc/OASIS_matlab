@@ -116,7 +116,8 @@ switch lower(options.method)
                 options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
                 [], options.maxIter);
         else
-            disp('to be done');
+            [c, options.b, ~, options.pars, options.sn, s] = constrained_foopsi(y, options.b, ...
+                [], options.pars, options.sn); 
         end
     case 'thresholded'  %% Use hard-shrinkage method
         if strcmpi(options.type, 'ar1')

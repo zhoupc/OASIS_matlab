@@ -1,6 +1,7 @@
 oasis_folder = fileparts(mfilename('fullpath')); 
 addpath(sprintf('%s%sfunctions', oasis_folder, filesep)); 
 addpath(sprintf('%s%soasis', oasis_folder, filesep)); 
+addpath(sprintf('%s%sconstrained-foopsi', oasis_folder, filesep)); 
 
 %% install convex optimization solvers
 optimization_folder = sprintf('%s%soptimization', oasis_folder, filesep); 
