@@ -1,4 +1,4 @@
-function [c, s, b, g, active_set] = foopsi_oasisAR1(y, g, lam, optimize_b,...
+function [c, s, b, g, active_set] = foopsi_oasisAR1(y, g, lam, smin, optimize_b,...
     optimize_g, decimate, maxIter)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
@@ -40,6 +40,7 @@ if ~exist('g', 'var') || isempty(g)
     g = estimate_time_constant(y, 1);
 end
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
+if ~exist('smin', 'var') || isempty(smin);   smin = 0; end
 if ~exist('optimize_b', 'var') || isempty(optimize_b)
     optimize_b = false;
 end
@@ -70,23 +71,23 @@ end
 if ~optimize_b   %% don't optimize the baseline b
     %% initialization
     b = 0;
-    [solution, spks, active_set] = oasisAR1(y, g, lam);
+    [solution, spks, active_set] = oasisAR1(y, g, lam, smin);
     
     %% iteratively update parameters g
     if  optimize_g     % update g
-        [solution, active_set, g, spks] = update_g(y, active_set,lam);
+        [solution, active_set, g, spks] = update_g(y, active_set,lam, smin);
     end
 else
     %% initialization
     b = quantile(y, 0.15);
-    [solution, spks, active_set] = oasisAR1(y-b, g, lam);
+    [solution, spks, active_set] = oasisAR1(y-b, g, lam, smin);
     
     %% iteratively update parameters g and b
     for m=1:maxIter
         b = mean(y-solution);
         if  optimize_g     % update g
             g0 = g;
-            [solution, active_set, g, spks] = update_g(y-b, active_set,lam);
+            [solution, active_set, g, spks] = update_g(y-b, active_set,lam, smin);
             if abs(g-g0)/g0 < 1e-3  % g is converged
                 optimize_g = false;
             end
@@ -99,7 +100,7 @@ c = solution;
 s = spks;
 end
 %update the AR coefficient: g
-function [c, active_set, g, s] = update_g(y, active_set, lam)
+function [c, active_set, g, s] = update_g(y, active_set, lam, smin)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
@@ -137,7 +138,7 @@ for m=1:len_active_set
     active_set(m,1) = (yp(idx))'*tmp_h(1:li);
     active_set(m,2) = tmp_hh(li);
 end
-[c,s,active_set] = oasisAR1(y, g, lam, [], active_set);
+[c,s,active_set] = oasisAR1(y, g, lam, smin, active_set);
 
 %% nested functions
     function rss = rss_g(g)

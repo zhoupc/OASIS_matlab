@@ -76,7 +76,7 @@ g_converged = false;
 
 %% optimize parameters
 tol = 1e-4;
-flag_lam = true;
+% flag_lam = true;
 if ~optimize_b   %% don't optimize the baseline b
     %% initialization
     b = 0;
@@ -84,31 +84,30 @@ if ~optimize_b   %% don't optimize the baseline b
     
     %% iteratively update parameters lambda & g
     for miter=1:maxIter
+        % update g
+        if and(optimize_g, ~g_converged);
+            g0 = g;
+            [solution, active_set, g, spks] = update_g(y, active_set,lam);
+            if abs(g-g0)/g0 < 1e-3  % g is converged
+                g_converged = true;
+            end
+        end
         res = y - solution;
         RSS = res' * res;
-        len_active_set = size(active_set, 1); 
-        if or(abs(RSS-thresh) < tol, ~flag_lam)  % constrained form has been found, stop
+        len_active_set = size(active_set, 1);
+        if RSS>thresh  % constrained form has been found, stop
             break;
         else
             % update lam
-            update_phi; 
-            lam = lam + dphi; 
-      
-            % update g
-            if and(optimize_g, ~g_converged);
-                g0 = g;
-                [solution, active_set, g, spks] = update_g(y, active_set,lam);
-                if abs(g-g0)/g0 < 1e-3  % g is converged
-                    g_converged = true;
-                end
-            end
+            update_phi;
+            lam = lam + dphi;
         end
     end
 else
     %% initialization
-    b = quantile(y, 0.15); 
+    b = quantile(y, 0.15);
     [solution, spks, active_set] = oasisAR1(y-b, g, lam);
-    update_lam_b; 
+    update_lam_b;
     
     %% optimize the baseline b and dependends on the optimized g too
     g_converged = false;
@@ -123,16 +122,16 @@ else
             %% update b & lamba
             update_phi();
             update_lam_b();
-                        % update b and g    
+            % update b and g
             % update b and g
             if and(optimize_g, ~g_converged);
                 g0 = g;
-                [solution, active_set, g, spks] = update_g(y-b, active_set,lam);       
+                [solution, active_set, g, spks] = update_g(y-b, active_set,lam);
                 if abs(g-g0)/g0 < 1e-4;
                     g_converged = true;
                 end
             end
-
+            
         end
     end
     
@@ -140,7 +139,7 @@ end
 c = solution;
 s = spks;
 
-%% nested functions 
+%% nested functions
     function update_phi()  % estimate dphi to match the thresholded RSS
         zeta = zeros(size(solution));
         maxl = max(active_set(:, 4));
@@ -170,10 +169,10 @@ s = spks;
             dphi = (-bb + sqrt(bb^2-aa*cc)) / aa;
         end
         if imag(dphi)>1e-9
-            flag_phi = false; 
-            return; 
+            flag_phi = false;
+            return;
         else
-            flag_phi = true; 
+            flag_phi = true;
         end
         active_set(:,1) = active_set(:,1) - dphi*(1-g.^active_set(:,4));
         [solution, spks, active_set] = oasisAR1([], g, lam, [], active_set);
@@ -192,7 +191,7 @@ s = spks;
     end
 
 end
- %update the AR coefficient: g
+%update the AR coefficient: g
 function [c, active_set, g, s] = update_g(y, active_set, lam)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities

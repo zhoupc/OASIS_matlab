@@ -1,8 +1,8 @@
 function [c, s, b, g, smin, active_set] = thresholded_oasisAR1(y, g, sn, optimize_b,...
-    optimize_g, decimate, maxIter, thresh_factor)
+    optimize_g, decimate, maxIter, thresh_factor, p_noise)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
-%  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >=s_min or =0
+%  min 1/2|c-y|^2  subject to s_t = c_t-g c_{t-1} >=s_min or =0
 
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
@@ -18,13 +18,15 @@ function [c, s, b, g, smin, active_set] = thresholded_oasisAR1(y, g, sn, optimiz
 %   maxIter:  int, maximum number of iterations
 %   active_set: npool x 4 matrix, warm stared active sets
 %  thresh_factor: scalar, set the maximum thresh as thresh_factor*sn^2*T
+%  smin_p: scalar, the probability of rejecting false spikes resulted from
+%  noise 
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
 %   s: T*1 vector, discetized deconvolved neural activity (spikes)
 %   b: scalar, fluorescence baseline
 %   g: scalar, parameter of the AR(1) process
-%   smin: scalar, minimum nonzero spike count 
+%   smin: scalar, minimum nonzero spike count
 %   active_set: npool x 4 matrix, active sets
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
@@ -40,13 +42,19 @@ T = length(y);
 
 if ~exist('g', 'var') || isempty(g)
     g = estimate_time_constant(y, 1);
+    g = g(1); 
 end
-if ~exist('sn', 'var') || isempty(sn)
-    sn = GetSn(y);
-end
-if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
+
 if ~exist('optimize_b', 'var') || isempty(optimize_b)
     optimize_b = false;
+end
+
+if ~exist('sn', 'var') || isempty(sn)
+    if optimize_b
+        [b, sn] = estimate_baseline_noise(y);
+    else
+        [~, sn] = estimate_baseline_noise(y);
+    end
 end
 if ~exist('optimize_g', 'var') || isempty(optimize_g)
     optimize_g = 0;
@@ -62,9 +70,13 @@ end
 if ~exist('thresh_factor', 'var') || isempty(thresh_factor)
     thresh_factor = 1.0;
 end
+if ~exist('p_noise', 'var') || isempty(p_noise)
+    p_noise = 0.9999;
+end
 
+% thresh = thresh_factor* sn * sn * T;
+smin = choose_smin(g, sn, p_noise);
 thresh = thresh_factor* sn * sn * T;
-smin = 0;
 
 % change parameters due to downsampling
 if decimate>1
@@ -81,113 +93,127 @@ g_converged = false;
 %% optimize parameters
 tol = 1e-4;
 if ~optimize_b   %% don't optimize the baseline b
-    %% initialization
     b = 0;
+    %% initialization
     [solution, spks, active_set] = oasisAR1(y, g, [], smin);
-            len_active_set = size(active_set, 1); 
-
-    %% iteratively update parameters lambda & g
+    
+    res = y - solution;
+    RSS0 = res' * res;
+    %% optimize the baseline b and dependends on the optimized g too
     for miter=1:maxIter
-        res = y - solution;
-        RSS = res' * res;
-        if or(RSS>thresh, sum(solution)<1e-9)  % constrained form has been found, stop
+        if isempty(active_set)
             break;
-        else
-            % update lam
-            [smin, solution, spks, active_set] = update_smin(y, g, smin,...
-                solution, spks, active_set, sqrt(thresh)); 
-      
-            % update g
-            if and(optimize_g, ~g_converged);
-                g0 = g;
-                [solution, active_set, g, spks] = update_g(y, active_set,smin);
-                if abs(g-g0)/g0 < 1e-3 % g is converged
-                    g_converged = true;
-                end
-            end
-            
-            % no more change of the active set 
-            if size(active_set,1)==len_active_set
-                break; 
+        end
+        % update b and g
+        if and(optimize_g, ~g_converged);
+            g0 = g;
+            [solution, active_set, g, spks] = update_g(y, active_set, smin);
+            if abs(g-g0)/g0 < 1e-4;
+                g_converged = true;
             end
         end
-    end
-else
-    %% initialization
-    b = quantile(y, 0.15); 
-    [solution, spks, active_set] = oasisAR1(y-b, g, [], smin);
-    
-    %% optimize the baseline b and dependends on the optimized g too
-    g_converged = false;
-    for miter=1:maxIter
-        res = y - solution - b;
+        
+        res = y - solution;
         RSS = res' * res;
+        if abs(RSS-RSS0)<tol  % no more changes
+            break;
+        end
         len_active_set = size(active_set,1);
         
         if or(abs(RSS-thresh) < tol, sum(solution)<1e-9)
             break;
         else
+            RSS0 = RSS;
+            % update smin
+            [smin, solution, spks, active_set] = update_smin(y, g, smin,...
+                solution, spks, active_set, sqrt(thresh));
+        end
+    end
+else
+    %% initialization
+    [b, ~] = estimate_baseline_noise(y); 
+    [solution, spks, active_set] = oasisAR1(y-b, g, [], smin);
+    
+    res = y - solution - b;
+    RSS0 = res' * res;
+    %% optimize the baseline b and dependends on the optimized g too
+    for miter=1:maxIter
+        if isempty(active_set)
+            break;
+        end
+        % update b and g
+        if and(optimize_g, ~g_converged);
+            g0 = g;
+            [solution, active_set, g, spks] = update_g(y-b, active_set, smin);
+            if abs(g-g0)/g0 < 1e-4;
+                g_converged = true;
+                [solution, spks, active_set] = oasisAR1(y-b, g, [], smin); 
+            end
+        end
+        
+        res = y - solution - b;
+        RSS = res' * res;
+        if abs(RSS-RSS0)<tol  % no more changes
+            break;
+        end
+        len_active_set = size(active_set,1);
+        
+        if or(abs(RSS-thresh) < tol, sum(solution)<1e-9)
+            break;
+        else
+            RSS0 = RSS;
             % update smin
             [smin, solution, spks, active_set] = update_smin(y-b, g, smin,...
-                solution, spks, active_set, sqrt(thresh)); 
-            b = mean(y-solution); 
-            
-            % update b and g
-            if and(optimize_g, ~g_converged);
-                g0 = g;
-                [solution, active_set, g, spks] = update_g(y-b, active_set,lam);       
-                if abs(g-g0)/g0 < 1e-4;
-                    g_converged = true;
-                end
-            end
-
+                solution, spks, active_set, sqrt(thresh));
+            b = mean(y-solution);
         end
     end
     
 end
 c = solution;
 s = spks;
+g = g(1); 
 
 %% nested functions
     function [smin, solution, spks, active_set] = update_smin(y, g, smin, solution, ...
-            spks, active_set, thresh) 
-         %%estimate smin to match the thresholded RSS 
-         len_active_set = size(active_set, 1); 
-         s_max = max(active_set(:,1)./active_set(:,2)); 
-         sv = linspace(smin, s_max, min(9, len_active_set));
-         ind_start = 1;
-         ind_end = length(sv);
-         
-         while (ind_end-ind_start)>1
-             ind = floor((ind_start+ind_end)/2);
-             tmp_smin = sv(ind);
-             [tmp_solution, tmp_spks, tmp_active_set] = oasisAR1([], g, [], ...
-                 tmp_smin, active_set);
-             sqRSS = norm(y-tmp_solution,2);
-             if sqRSS<thresh % increase smin
-                 solution = tmp_solution; 
-                 spks = tmp_spks; 
-                 active_set = tmp_active_set; 
-                 smin = tmp_smin; 
-                 ind_start = ind;
-             elseif sqRSS>thresh % decrease smin
-                 ind_end = ind; 
-             else
-                 break; 
-             end
-         end
+            spks, active_set, thresh)
+        %%estimate smin to match the thresholded RSS
+        len_active_set = size(active_set, 1);
+        s_max = max(active_set(:,1)./active_set(:,2));
+        sv = linspace(smin, s_max, min(9, len_active_set));
+        ind_start = 1;
+        ind_end = length(sv);
+        
+        while (ind_end-ind_start)>1
+            ind = floor((ind_start+ind_end)/2);
+            tmp_smin = sv(ind);
+            [tmp_solution, tmp_spks, tmp_active_set] = oasisAR1([], g, [], ...
+                tmp_smin, active_set);
+            sqRSS = norm(y-tmp_solution,2);
+            if sqRSS<thresh % increase smin
+                solution = tmp_solution;
+                spks = tmp_spks;
+                active_set = tmp_active_set;
+                smin = tmp_smin;
+                ind_start = ind;
+            elseif sqRSS>thresh % decrease smin
+                ind_end = ind;
+            else
+                break;
+            end
+        end
     end
 
 
 end
 
- %update the AR coefficient: g
+%update the AR coefficient: g
 function [c, active_set, g, s] = update_g(y, active_set, smin)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
 %   active_set: npools*4 matrix, previous active sets.
-% smin: scalr, minimize size of nonzero spikes 
+% smin: scalr, minimize size of nonzero spikes
 
 %% outputs
 %   c: T*1 vector
@@ -210,7 +236,7 @@ c = zeros(size(y));     % the optimal denoised trace
 
 %% find the optimal g and get the warm started active_set
 g = fminbnd(@rss_g, 0, 1);
-yp = y; 
+yp = y;
 for m=1:len_active_set
     tmp_h = exp(log(g)*(0:maxl)');   % response kernel
     tmp_hh = cumsum(h.*h);        % hh(k) = h(1:k)'*h(1:k)

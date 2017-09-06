@@ -29,9 +29,18 @@ function [c, s, active_set] = oasisAR1(y, g, lam, smin, active_set)
 
 %% initialization
 y = reshape(y, [], 1);
+if isempty(y)
+    T = sum(active_set(:,4)); 
+else
 T = length(y);
+end
 if ~exist('g', 'var') || isempty(g)
     g = estimate_time_constant(y);
+elseif length(g)>1
+    c = zeros(T,1); 
+    s = zeros(T,1); 
+    active_set = []; 
+    return; 
 end
 if ~exist('lam', 'var') || isempty(lam);   lam = 0; end
 if ~exist('smin', 'var') || isempty(smin);   smin = 0; end
@@ -89,7 +98,7 @@ active_set(~idx, :) = [];
 len_active_set = size(active_set,1);
 
 %% construct solution for all t
-c = zeros(size(y));
+c = zeros(T, 1);
 s = c;
 for ii=1:len_active_set
     t0 = active_set(ii,3);

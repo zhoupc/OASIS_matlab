@@ -1,4 +1,4 @@
-function [c, s] = constrained_foopsi(y, g, sn, solver)
+function [c, s] = constrained_foopsi_cvx(y, g, sn, solver)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min |s|_1 subject to s=G*c >=0 and |y-c|_2^2=\sigma*T^2 
@@ -25,9 +25,9 @@ function [c, s] = constrained_foopsi(y, g, sn, solver)
 %% initialization
 y = reshape(y, [], 1);
 T = length(y);
-if ~exist('g', 'var') || isempty(g);   g = 0.95; end
+if ~exist('g', 'var') || isempty(g);   g = estimate_time_constant(y, 1); end
 if ~exist('sn', 'var') || isempty(sn);   sn = GetSn(y); end
-if ~exist('solver', 'var') || isempty(smin);   solver = 'SDPT3'; end
+if ~exist('solver', 'var') || isempty(solver);   solver = 'SDPT3'; end
 
 % construct the deconvolution matrix (s=G*c)
 len_g = length(g);
@@ -39,7 +39,7 @@ ind = (indc>0);
 G = sparse(indr(ind), indc(ind), v(ind), T, T);
 
 %% run optimization
-cvx_solver(solver); 
+% cvx_solver(solver); 
 cvx_begin quiet
     variable c(T)
     minimize(norm(c,1))

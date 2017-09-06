@@ -59,8 +59,11 @@ function [c, s, options] = deconvolveCa(y, varargin)
 
 %% input arguments
 y = reshape(y, [], 1);  % reshape the trace as a vector
-T = length(y);          % length of y
 options = parseinputs(varargin{:});     % parse input arguments
+if isempty(y)
+    c = []; s = [];
+    return;
+end
 win = options.window;   % length of the convolution kernel
 % estimate the noise
 if isempty(options.sn)
@@ -70,21 +73,35 @@ end
 if isempty(options.pars)
     switch options.type
         case 'ar1'
+            try
             options.pars = estimate_time_constant(y, 1, options.sn);
+            catch 
+                c = y*0;
+                s = c; 
+                fprintf('fail to deconvolve the trace\n'); 
+                return; 
+            end
+            if length(options.pars)~=1
+                c = zeros(size(y)); 
+                s = zeros(size(y)); 
+                options.pars = 0; 
+                return; 
+            end
         case 'ar2'
             options.pars = estimate_time_constant(y, 2, options.sn);
+            if length(options.pars)~=2
+                c = zeros(size(y)); 
+                s = zeros(size(y)); 
+                options.pars =[0,0]; 
+                return; 
+            end
         case 'exp2'
             g = estimate_time_constant(y, 2, options.sn);
-            temp = roots([1, -g(1), -g(2)]);
-            d = max(temp);
-            r = min(temp);
-            options.pars = [d, r];
+            options.pars = ar2exp(g);
         case 'kernel'
             g = estimate_time_constant(y, 2, options.sn);
-            temp = roots([1, -g(1), -g(2)]);
-            d = max(temp);
-            r = min(temp);
-            options.pars = (exp(log(d)*(1:win)) - exp(log(r)*(1:win))) / (d-r); % convolution kernel
+            taus = ar2exp(g);
+            options.pars = exp2kernel(taus, options.win);  % convolution kernel
     end
 end
 
@@ -94,15 +111,14 @@ s = y;
 switch lower(options.method)
     case 'foopsi'  %% use FOOPSI
         if strcmpi(options.type, 'ar1')  % AR 1
-            [c, s, options.b, options.g] = foopsi_oasisAR1(y-options.b, options.pars, options.lambda, ...
-                options.optimize_b, options.optimize_pars, [], options.maxIter);
+            [c, s, options.b, options.pars] = foopsi_oasisAR1(y-options.b, options.pars, options.lambda, ...
+                options.smin, options.optimize_b, options.optimize_pars, [], options.maxIter);
         elseif strcmpi(options.type, 'ar2') % AR 2
-            [c, s] = foopsi_oasisAR2(y-options.b, options.pars, options.lambda);
+            [c, s, options.b, options.pars] = foopsi_oasisAR2(y-options.b, options.pars, options.lambda, ...
+                options.smin);
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
-            d = options.pars(1);
-            r = options.pars(2);
-            options.pars = (exp(log(d)*(1:win)) - exp(log(r)*(1:win))) / (d-r); % convolution kernel
-            [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
+            kernel = exp2kernel(options.pars, options.window);
+            [c, s] = onnls(y-options.b, kernel, options.lambda, ...
                 options.shift, options.window);
         elseif strcmpi(options.type, 'kernel') % convolution kernel itself
             [c, s] = onnls(y-options.b, options.pars, options.lambda, ...
@@ -116,28 +132,38 @@ switch lower(options.method)
                 options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
                 [], options.maxIter);
         else
-            [c, options.b, ~, options.pars, options.sn, s] = constrained_foopsi(y, options.b, ...
-                [], options.pars, options.sn); 
+            [cc, options.b, c1, options.pars, options.sn, s] = constrained_foopsi(y,[],[],options.pars,options.sn, ...
+                options.extra_params);
+            gd = max(roots([1,-options.pars']));  % decay time constant for initial concentration
+            gd_vec = gd.^((0:length(y)-1));
+            c = cc(:) + c1*gd_vec';
+            options.cin = c1;
         end
     case 'thresholded'  %% Use hard-shrinkage method
         if strcmpi(options.type, 'ar1')
-            if and(options.smin==0, options.optimize_smin) % smin is given
-                [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
-                    options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
-                    [], options.maxIter, options.thresh_factor);
-            else
-                [c, s] = oasisAR1(y-options.b, options.pars, options.lambda, ...
-                    options.smin);
-            end
+            [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
+                options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+                [], options.maxIter, options.thresh_factor, options.p_noise);
+            %             if and(options.smin==0, options.optimize_smin) % smin is given
+            %                 [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
+            %                     options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+            %                     [], options.maxIter, options.thresh_factor);
+            %             else
+            %                 [c, s] = oasisAR1(y-options.b, options.pars, options.lambda, ...
+            %                     options.smin);
+            %             end
         elseif strcmpi(options.type, 'ar2')
-            if and(options.smin==0, options.optimize_smin) % smin is given
-                [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR2(y,...
-                    options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
-                    [], options.maxIter, options.thresh_factor);
-            else
-                [c, s] = oasisAR2(y-options.b, options.pars, options.lambda, ...
-                    options.smin);
-            end           
+            [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR2(y,...
+                options.pars, options.sn, options.smin, options.optimize_b, options.optimize_pars, ...
+                [], options.maxIter, options.thresh_factor);
+            %             if and(options.smin==0, options.optimize_smin) % smin is given
+            %                 [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR2(y,...
+            %                     options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
+            %                     [], options.maxIter, options.thresh_factor);
+            %             else
+            %                 [c, s] = oasisAR2(y-options.b, options.pars, options.lambda, ...
+            %                     options.smin);
+            %             end
         elseif strcmpi(options.type, 'exp2')   % difference of two exponential functions
             d = options.pars(1);
             r = options.pars(2);
@@ -150,16 +176,18 @@ switch lower(options.method)
         else
             disp('to be done');
         end
+    case 'mcmc'
+        SAMP = cont_ca_sampler(y,options.extra_params);
+        options.extra_params = SAMP;
+        options.mcmc_results = SAMP;
+        plot_continuous_samples(SAMP,y);
 end
-%%
-kernel.type = options.type;
-kernel.pars = options.pars;
 
 function options=parseinputs(varargin)
 %% parse input variables
 
 %% default options
-options.type = 'ar2';
+options.type = 'ar1';
 options.pars = [];
 options.sn = [];
 options.b = 0;
@@ -173,9 +201,22 @@ options.shift = 100;
 options.smin = 0;
 options.maxIter = 10;
 options.thresh_factor = 1.0;
+options.extra_params = [];
+options.p_noise = 0.9999; 
 
+if isempty(varargin)
+    return;
+elseif isstruct(varargin{1}) && ~isempty(varargin{1})
+    tmp_options = varargin{1};
+    field_nams = fieldnames(tmp_options);
+    for m=1:length(field_nams)
+        eval(sprintf('options.%s=tmp_options.%s;', field_nams{m}, field_nams{m}));
+    end
+    k = 2;
+else
+    k = 1;
+end
 %% parse all input arguments
-k = 1;
 while k<=nargin
     
     switch lower(varargin{k})
@@ -202,23 +243,40 @@ while k<=nargin
         case 'optimize_b'
             % optimize the baseline
             options.optimize_b = true;
+            if (k<nargin) && (islogical(varargin{k+1}))
+                options.optimize_b = varargin{k+1};
+                k = k + 1;
+            end
             k = k+1;
         case 'optimize_pars'
             % optimize the parameters of the convolution kernel
             options.optimize_pars = true;
-            k = k+1;
+            if (k<nargin) && (islogical(varargin{k+1}))
+                options.optimize_pars = varargin{k+1};
+                k = k+1;
+            end
+            k = k + 1;
+            
         case 'optimize_smin'
             % optimize the parameters of the convolution kernel
             options.optimize_smin = true;
+            if (k<nargin) && (islogical(varargin{k+1}))
+                options.optimize_smin = varargin{k+1};
+                k = k+1;
+            end
             k = k+1;
         case 'lambda'
             % penalty
             options.lambda = varargin{k+1};
             k = k+2;
-        case {'foopsi', 'constrained', 'thresholded'}
+        case {'foopsi', 'constrained', 'thresholded', 'mcmc'}
             % method for running the deconvolution
             options.method = lower(varargin{k});
             k = k+1;
+            if strcmpi(options.method, 'mcmc') && (k<=length(varargin)) && (~ischar(varargin{k}))
+                options.extra_params = varargin{k};
+                k = k+1;
+            end
         case 'window'
             % maximum length of the kernel
             options.window = varargin{k+1};
@@ -242,6 +300,11 @@ while k<=nargin
             % number of frames by which to shift window from on run of NNLS
             % to the next
             options.thresh_factor = varargin{k+1};
+            k = k+2;       
+        case 'p_noise'
+            % number of frames by which to shift window from on run of NNLS
+            % to the next
+            options.p_noise = varargin{k+1};
             k = k+2;
         otherwise
             k = k+1;
@@ -252,11 +315,3 @@ end
 if strcmpi(options.type, 'kernel')
     options.window = numel(options.pars);
 end
-
-
-
-
-
-
-
-
