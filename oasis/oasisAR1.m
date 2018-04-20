@@ -98,8 +98,7 @@ active_set(~idx, :) = [];
 len_active_set = size(active_set,1);
 
 %% construct solution for all t
-len_y = sum(active_set(end,3:4))-1;
-c = zeros(len_y, 1);
+c = zeros(T, 1);
 s = c;
 for ii=1:len_active_set
     t0 = active_set(ii,3);
