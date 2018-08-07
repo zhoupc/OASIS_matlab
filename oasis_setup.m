@@ -14,7 +14,7 @@ end
 
 % install cvx 
 if isempty(which('cvx_begin.m'))
-    if ~exist('cvx', 'dir')
+    if ~exist(fullfile('optimization', 'cvx'), 'dir')
         %install cvx
         if ismac
             cvx_url = 'http://web.cvxr.com/cvx/cvx-maci64.zip';
