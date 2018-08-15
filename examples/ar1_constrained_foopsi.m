@@ -15,7 +15,7 @@ seed = 13;          % seed for genrating random variables
 [y, true_c, true_s] = gen_data(g, noise, T, framerate, firerate, b, N, seed); 
 
 % cvx solution 
-[c_cvx, s_cvx] = constrained_foopsi(y, g, noise); 
+[c_cvx, s_cvx] = constrained_foopsi_cvx(y, g, noise); 
 % case 1: all parameters are known 
 [c_oasis, s_oasis] = deconvolveCa(y, 'ar1', g, 'constrained', 'sn', noise);  %#ok<*ASGLU>
 

@@ -22,7 +22,7 @@ taus = ar2exp(g);
 ht = exp2kernel(taus, w); 
 % case 1: use the difference of two exponential functions to construct a
 % kernel 
-lambda = 25; 
+lambda = 0.1;  
 [c_oasis, s_oasis] = deconvolveCa(y, 'exp2', taus, 'foopsi', 'lambda', lambda, ...
     'shift', 100, 'window', 200);  %#ok<*ASGLU>
 
@@ -30,7 +30,7 @@ figure('name', 'FOOPSI, exp2, known: g, lambda', 'papersize', [15, 4]);
 show_results; 
 
 % case 2: use the kernel directly 
-lambda = 25; 
+lambda = 0.1; 
 [c_oasis, s_oasis] = deconvolveCa(y, 'kernel', ht, 'foopsi', 'lambda', ...
     lambda, 'shift', 100, 'window', 200);  %#ok<*ASGLU>
 
