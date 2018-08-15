@@ -6,7 +6,7 @@ Python: https://github.com/j-friedrich/OASIS
 
 MATLAB: https://github.com/zhoupc/OASIS_matlab
 
-[A brief summary of the FOOPSI approach for denoising & deconvolving calcium imaging](https://github.com/zhoupc/OASIS_matlab/blob/master/document/FOOPSI.html)
+[A brief summary of the FOOPSI approach for denoising & deconvolving calcium imaging](https://github.com/zhoupc/OASIS_matlab/blob/master/document/FOOPSI_.md)
 ## Get Started
 ### Installation 
 add OASIS function to the search path of MATLAB
