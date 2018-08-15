@@ -183,7 +183,7 @@ s = spks;
         b = b + db;
         dlam = -db/(1-g);
         
-        lam = lam + dlam;
+        lam = max(0, lam + dlam);
         % correct the last pool
         active_set(end,1) = active_set(end,1) - lam*g^(active_set(end,4));
         ti = active_set(end,3); li = active_set(end,4); idx = 0:(li-1);
