@@ -1,20 +1,20 @@
-oasis_folder = fileparts(mfilename('fullpath')); 
-addpath(sprintf('%s', oasis_folder)); 
-addpath(sprintf('%s%sfunctions', oasis_folder, filesep)); 
-addpath(sprintf('%s%soasis', oasis_folder, filesep)); 
-addpath(sprintf('%s%soasis_kernel', oasis_folder, filesep)); 
-addpath(sprintf('%s%sMCMC', oasis_folder, filesep)); 
-addpath(sprintf('%s%sMCMC%sutilities', oasis_folder, filesep, filesep)); 
+oasis_folder = fileparts(mfilename('fullpath'));
 
-%% install convex optimization solvers
-optimization_folder = sprintf('%s%soptimization', oasis_folder, filesep); 
-if ~exist(optimization_folder, 'dir'); 
-    mkdir(optimization_folder);
+if ~exist('oasis_loaded', 'var') || ~oasis_loaded
+    addpath(oasis_folder);
+    addpath(fullfile(oasis_folder, 'functions'));
+    addpath(fullfile(oasis_folder, 'packages', 'oasis'));
+    addpath(fullfile(oasis_folder, 'packages', 'oasis_kernel'));
+    addpath(fullfile(oasis_folder, 'packages', 'constrained-foopsi'));
+    addpath(fullfile(oasis_folder, 'packages', 'MCMC'));
+    addpath(fullfile(oasis_folder, 'packages', 'MCMC', 'utilities'));
+    oasis_loaded = true;
 end
 
-% install cvx 
+%% install convex optimization solvers
+% install cvx
 if isempty(which('cvx_begin.m'))
-    if ~exist(fullfile('optimization', 'cvx'), 'dir')
+    if ~exist(fullfile(oasis_folder, 'packages', 'cvx'), 'dir')
         %install cvx
         if ismac
             cvx_url = 'http://web.cvxr.com/cvx/cvx-maci64.zip';
@@ -27,10 +27,9 @@ if isempty(which('cvx_begin.m'))
             return;
         end
         fprintf('Downloading CVX...\n');
-        unzip(cvx_url, optimization_folder);
+        unzip(cvx_url, fullfile(oasis_folder, 'packages'));
     end
-    run(sprintf('%s%scvx%scvx_setup', optimization_folder, filesep, filesep));
+    run(fullfile(oasis_folder, 'packages', 'cvx', 'cvx_setup.m'));
 end
-
-%% save the current path 
-%savepath(); 
+%% save the current path
+%savepath();
