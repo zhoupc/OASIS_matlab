@@ -23,6 +23,8 @@ function [c, s] = constrained_foopsi_cvx(y, g, sn, solver)
 % Pnevmatikakis E. et.al., Neuron 2016, Simultaneous Denoising, Deconvolution, and Demixing of Calcium Imaging Data
 
 %% initialization
+evalin('base', 'install_cvx=true; oasis_setup;');  
+
 y = reshape(y, [], 1);
 T = length(y);
 if ~exist('g', 'var') || isempty(g);   g = estimate_time_constant(y, 1); end

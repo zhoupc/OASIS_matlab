@@ -38,6 +38,7 @@ function [c,b,c1,g,sn,sp] = constrained_foopsi(y,b,c1,g,sn,options)
 
 % Written by:
 % Eftychios A. Pnevmatikakis, Simons Foundation, 2015 
+evalin('base', 'install_cvx=true; oasis_setup;');  
 
 defoptions.p = 2;
 defoptions.method = 'cvx';

@@ -12,8 +12,9 @@ if ~exist('oasis_loaded', 'var') || ~oasis_loaded
 end
 
 %% install convex optimization solvers
-% install cvx
-if isempty(which('cvx_begin.m'))
+% by default, we don't install cvx any more. if you want to install cvx,
+% then set install_cvx = true and then run oasis-setup.m 
+if exist('install_cvx', 'var') && install_cvx && isempty(which('cvx_begin.m'))
     if ~exist(fullfile(oasis_folder, 'packages', 'cvx'), 'dir')
         %install cvx
         if ismac
