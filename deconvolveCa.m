@@ -74,26 +74,26 @@ if isempty(options.pars) || all(options.pars==0)
     switch options.type
         case 'ar1'
             try
-            options.pars = estimate_time_constant(y, 1, options.sn);
-            catch 
+                options.pars = estimate_time_constant(y, 1, options.sn);
+            catch
                 c = y*0;
-                s = c; 
-                fprintf('fail to deconvolve the trace\n'); 
-                return; 
+                s = c;
+                fprintf('fail to deconvolve the trace\n');
+                return;
             end
             if length(options.pars)~=1
-                c = zeros(size(y)); 
-                s = zeros(size(y)); 
-                options.pars = 0; 
-                return; 
+                c = zeros(size(y));
+                s = zeros(size(y));
+                options.pars = 0;
+                return;
             end
         case 'ar2'
             options.pars = estimate_time_constant(y, 2, options.sn);
             if length(options.pars)~=2
-                c = zeros(size(y)); 
-                s = zeros(size(y)); 
-                options.pars =[0,0]; 
-                return; 
+                c = zeros(size(y));
+                s = zeros(size(y));
+                options.pars =[0,0];
+                return;
             end
         case 'exp2'
             g = estimate_time_constant(y, 2, options.sn);
@@ -191,6 +191,13 @@ switch lower(options.method)
         plot_continuous_samples(SAMP,y);
 end
 
+% deal with large residual
+if options.remove_large_residuals && strcmpi(options.method, 'foopsi')
+    ind = (abs(smooth(y-c, 3))>options.smin);
+    c(ind) = max(0, y(ind));
+end
+
+
 function options=parseinputs(varargin)
 %% parse input variables
 
@@ -210,8 +217,9 @@ options.smin = 0;
 options.maxIter = 10;
 options.thresh_factor = 1.0;
 options.extra_params = [];
-options.p_noise = 0.9999; 
-options.max_tau = 100; 
+options.p_noise = 0.9999;
+options.max_tau = 100;
+options.remove_large_residuals = false; 
 
 if isempty(varargin)
     return;
@@ -228,8 +236,8 @@ end
 %% parse all input arguments
 while k<=nargin
     if isempty(varargin{k})
-        k = k+1; 
-    end 
+        k = k+1;
+    end
     switch lower(varargin{k})
         case {'ar1', 'ar2', 'exp2', 'kernel'}
             % convolution kernel type
@@ -311,12 +319,20 @@ while k<=nargin
             % number of frames by which to shift window from on run of NNLS
             % to the next
             options.thresh_factor = varargin{k+1};
-            k = k+2;       
+            k = k+2;
         case 'p_noise'
             % number of frames by which to shift window from on run of NNLS
             % to the next
             options.p_noise = varargin{k+1};
             k = k+2;
+        case 'remove_large_residuals'
+            % remove large residuals by setting c(t) = y(t) 
+            options.remove_large_residuals = true;
+            if (k<nargin) && (islogical(varargin{k+1}))
+                options.remove_large_residuals = varargin{k+1};
+                k = k+1;
+            end
+            k = k+1;   
         otherwise
             k = k+1;
     end
