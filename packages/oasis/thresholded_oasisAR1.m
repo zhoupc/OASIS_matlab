@@ -80,7 +80,7 @@ smin = choose_smin(g, sn, p_noise);
 thresh = thresh_factor* sn * sn * T;
 
 if ~exist('tau_range', 'var') || isempty(tau_range)
-   g_range = [0, inf];
+   g_range = [0, 1];
 else
    g_range = exp(-1./tau_range); 
    g = min(max(g, g_range(1)), g_range(2)); 

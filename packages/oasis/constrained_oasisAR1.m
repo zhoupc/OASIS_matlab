@@ -60,7 +60,7 @@ if ~exist('maxIter', 'var') || isempty(maxIter)
     maxIter = 10;
 end
 if ~exist('tau_range', 'var') || isempty(tau_range)
-   tau_range = [0, inf];
+   g_range = [0, 1];
 else
    g_range = exp(-1./tau_range); 
    g = min(max(g, g_range(1)), g_range(2)); 
