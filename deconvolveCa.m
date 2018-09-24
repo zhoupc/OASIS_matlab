@@ -114,10 +114,10 @@ switch lower(options.method)
             if options.smin<0
                 options.smin = abs(options.smin)*options.sn;
             end
-            
-            gmax = exp(-1/options.max_tau);
+            gmax = exp(-1/options.max_tau); 
             [c, s, options.b, options.pars] = foopsi_oasisAR1(y-options.b, options.pars, options.lambda, ...
-                options.smin, options.optimize_b, options.optimize_pars, [], options.maxIter, gmax);
+                options.smin, options.optimize_b, options.optimize_pars, [], options.maxIter, ...
+                options.tau_range, gmax);
         elseif strcmpi(options.type, 'ar2') % AR 2
             if options.smin<0
                 options.smin = abs(options.smin)*options.sn/max_ht(options.pars);
@@ -138,7 +138,7 @@ switch lower(options.method)
         if strcmpi(options.type, 'ar1')  % AR1
             [c, s, options.b, options.pars, options.lambda] = constrained_oasisAR1(y,...
                 options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
-                [], options.maxIter);
+                [], options.maxIter, options.tau_range);
         else
             [cc, options.b, c1, options.pars, options.sn, s] = constrained_foopsi(y,[],[],options.pars,options.sn, ...
                 options.extra_params);
@@ -151,7 +151,8 @@ switch lower(options.method)
         if strcmpi(options.type, 'ar1')
             [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
                 options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
-                [], options.maxIter, options.thresh_factor, options.p_noise);
+                [], options.maxIter, options.thresh_factor, options.p_noise, ...
+                options.tau_range);
             %             if and(options.smin==0, options.optimize_smin) % smin is given
             %                 [c, s, options.b, options.pars, options.smin] = thresholded_oasisAR1(y,...
             %                     options.pars, options.sn, options.optimize_b, options.optimize_pars, ...
@@ -212,6 +213,7 @@ options.thresh_factor = 1.0;
 options.extra_params = [];
 options.p_noise = 0.9999; 
 options.max_tau = 100; 
+options.tau_range = []; 
 
 if isempty(varargin)
     return;
@@ -317,6 +319,9 @@ while k<=nargin
             % to the next
             options.p_noise = varargin{k+1};
             k = k+2;
+        case 'tau_range'
+            options.tau_range = varargin{k+1}; 
+            k = k+2; 
         otherwise
             k = k+1;
     end

@@ -1,5 +1,5 @@
 function [c, s, b, g, smin, active_set] = thresholded_oasisAR1(y, g, sn, optimize_b,...
-    optimize_g, decimate, maxIter, thresh_factor, p_noise)
+    optimize_g, decimate, maxIter, thresh_factor, p_noise, tau_range)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2  subject to s_t = c_t-g c_{t-1} >=s_min or =0
@@ -20,6 +20,7 @@ function [c, s, b, g, smin, active_set] = thresholded_oasisAR1(y, g, sn, optimiz
 %  thresh_factor: scalar, set the maximum thresh as thresh_factor*sn^2*T
 %  smin_p: scalar, the probability of rejecting false spikes resulted from
 %  noise 
+%   tau_range: [tau_min, tau_max]
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
@@ -78,6 +79,13 @@ end
 smin = choose_smin(g, sn, p_noise);
 thresh = thresh_factor* sn * sn * T;
 
+if ~exist('tau_range', 'var') || isempty(tau_range)
+   g_range = [0, inf];
+else
+   g_range = exp(-1./tau_range); 
+   g = min(max(g, g_range(1)), g_range(2)); 
+end
+
 % change parameters due to downsampling
 if decimate>1
     decimate = 1;  %#ok<NASGU>
@@ -107,7 +115,7 @@ if ~optimize_b   %% don't optimize the baseline b
         % update b and g
         if and(optimize_g, ~g_converged);
             g0 = g;
-            [solution, active_set, g, spks] = update_g(y, active_set, smin);
+            [solution, active_set, g, spks] = update_g(y, active_set, smin, g_range);
             if abs(g-g0)/g0 < 1e-4;
                 g_converged = true;
             end
@@ -144,7 +152,7 @@ else
         % update b and g
         if and(optimize_g, ~g_converged);
             g0 = g;
-            [solution, active_set, g, spks] = update_g(y-b, active_set, smin);
+            [solution, active_set, g, spks] = update_g(y-b, active_set, smin, g_range);
             if abs(g-g0)/g0 < 1e-4;
                 g_converged = true;
                 [solution, spks, active_set] = oasisAR1(y-b, g, [], smin); 
@@ -208,7 +216,7 @@ g = g(1);
 end
 
 %update the AR coefficient: g
-function [c, active_set, g, s] = update_g(y, active_set, smin)
+function [c, active_set, g, s] = update_g(y, active_set, smin, g_range)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
@@ -233,9 +241,11 @@ len_active_set = size(active_set, 1);  %number of active sets
 y = reshape(y,[],1);    % fluorescence data
 maxl = max(active_set(:, 4));   % maximum ISI
 c = zeros(size(y));     % the optimal denoised trace
-
+if ~exist('g_range', 'var') || isempty(g_range)
+   g_range = [0, 1];  
+end
 %% find the optimal g and get the warm started active_set
-g = fminbnd(@rss_g, 0, 1);
+g = fminbnd(@rss_g, g_range(1), g_range(2));
 yp = y;
 for m=1:len_active_set
     tmp_h = exp(log(g)*(0:maxl)');   % response kernel

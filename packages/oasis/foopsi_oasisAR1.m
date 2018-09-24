@@ -1,5 +1,5 @@
 function [c, s, b, g, active_set] = foopsi_oasisAR1(y, g, lam, smin, optimize_b,...
-    optimize_g, decimate, maxIter, gmax)
+    optimize_g, decimate, maxIter, tau_range, gmax)
 %% Infer the most likely discretized spike train underlying an AR(1) fluorescence trace
 % Solves the sparse non-negative deconvolution problem
 %  min 1/2|c-y|^2 + lam |s|_1 subject to s_t = c_t-g c_{t-1} >= 0
@@ -18,7 +18,7 @@ function [c, s, b, g, active_set] = foopsi_oasisAR1(y, g, lam, smin, optimize_b,
 %   maxIter:  int, maximum number of iterations
 %   active_set: npool x 4 matrix, warm stared active sets
 %   gmax:  scalar, maximum value of g
-
+%   tau_range: [tau_min, tau_max]
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
 %   s: T*1 vector, discetized deconvolved neural activity (spikes)
@@ -60,6 +60,12 @@ end
 if ~exist('maxIter', 'var') || isempty(maxIter)
     maxIter = 10;
 end
+if ~exist('tau_range', 'var') || isempty(tau_range)
+   g_range = [0, inf];
+else
+   g_range = exp(-1./tau_range); 
+   g = min(max(g, g_range(1)), g_range(2)); 
+end
 
 % change parameters due to downsampling
 if decimate>1
@@ -80,7 +86,7 @@ if ~optimize_b   %% don't optimize the baseline b
     
     %% iteratively update parameters g
     if  optimize_g     % update g
-        [solution, active_set, g, spks] = update_g(y, active_set,lam, smin);
+        [solution, active_set, g, spks] = update_g(y, active_set,lam, smin, g_range);
     end
 else
     %% initialization
@@ -97,7 +103,7 @@ else
                 [solution, spks, active_set] = oasisAR1(y-b, g, lam, smin);
                 break;
             end
-            [solution, active_set, g, spks] = update_g(y-b, active_set,lam, smin);
+            [solution, active_set, g, spks] = update_g(y-b, active_set,lam, smin, g_range);
             if abs(g-g0)/g0 < 1e-3  % g is converged
                 optimize_g = false;
             end
@@ -110,7 +116,7 @@ c = solution;
 s = spks;
 end
 %update the AR coefficient: g
-function [c, active_set, g, s] = update_g(y, active_set, lam, smin)
+function [c, active_set, g, s] = update_g(y, active_set, lam, smin, g_range)
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
 %withone entry per time-bin.
@@ -130,14 +136,16 @@ function [c, active_set, g, s] = update_g(y, active_set, lam, smin)
 % Friedrich J et.al., NIPS 2016, Fast Active Set Method for Online Spike Inference from Calcium Imaging
 
 %% initialization
-
+if ~exist('g_range', 'var') || isempty(g_range)
+   g_range = [0, 1];  
+end
 len_active_set = size(active_set, 1);  %number of active sets
 y = reshape(y,[],1);    % fluorescence data
 maxl = max(active_set(:, 4));   % maximum ISI
 c = zeros(size(y));     % the optimal denoised trace
 
 %% find the optimal g and get the warm started active_set
-g = fminbnd(@rss_g, 0, 1);
+g = fminbnd(@rss_g, g_range(1), g_range(2));
 yp = y - lam*(1-g);
 for m=1:len_active_set
     tmp_h = exp(log(g)*(0:maxl)');   % response kernel
