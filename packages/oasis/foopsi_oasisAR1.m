@@ -97,6 +97,9 @@ else
     for m=1:maxIter
         b = mean(y-solution);
         if  optimize_g     % update g
+            if size(active_set, 1) == 0
+                break;
+            end
             g0 = g;
             if g>gmax  % spike counts are too small. stop
                 g = estimate_time_constant(y, 1);
