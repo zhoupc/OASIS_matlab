@@ -198,7 +198,7 @@ end
 
 % deal with large residual
 if options.remove_large_residuals && strcmpi(options.method, 'foopsi')
-    ind = (abs(smooth(y-c, 3))>options.smin);
+    ind = (abs(fastsmooth(y-c, 3))>options.smin);
     c(ind) = max(0, y(ind));
 end
 
