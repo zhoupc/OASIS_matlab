@@ -198,10 +198,12 @@ end
 
 % deal with large residual
 if options.remove_large_residuals && strcmpi(options.method, 'foopsi')
-    ind = (abs(fastsmooth(y-c, 3))>options.smin);
+    ind = (abs(fastsmooth(y-c, 3))>options.smin) & (c>options.smin*5);
     c(ind) = max(0, y(ind));
 end
 
+% avoid nan output 
+c(isnan(c) | isinf(c)) = 0; 
 
 function options=parseinputs(varargin)
 %% parse input variables
