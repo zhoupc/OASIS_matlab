@@ -5,20 +5,20 @@ function [c, s, active_set] = oasisAR1(y, g, lam, smin, active_set)
 
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
-%withone entry per time-bin.
+% with one entry per time-bin.
 % OR %%
 % len_active_set*4 matrix, active set
 
 %   g:  scalar, Parameter of the AR(1) process that models the fluorescence ...
-%impulse response.
+% impulse response.
 %   lam:  scalar, sparsity penalty parameter lambda.
 %   smin: scalar, optional, default 0
-%miniumal non-zero activity within each bin (minimal 'spike size').
+% minimal non-zero activity within each bin (minimal 'spike size').
 %   active_set: npool x 4 matrix, warm stared active sets
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
-%   s: T*1 vector, discetized deconvolved neural activity (spikes)
+%   s: T*1 vector, discretized deconvolved neural activity (spikes)
 %   active_set: npool x 4 matrix, active sets
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016

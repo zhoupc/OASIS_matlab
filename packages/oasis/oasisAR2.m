@@ -5,14 +5,14 @@ function [c, s, active_set] = oasisAR2(y, g, lam, smin, T_over_ISI, jitter, acti
 
 %% inputs:
 %   y:  T*1 vector, One dimensional array containing the fluorescence intensities
-%withone entry per time-bin.
+% with one entry per time-bin.
 %   g1:  scalar, first parameter of the AR(2) process that models the fluorescence ...
 %impulse response.
 %   g2:  scalar, second parameter of the AR(2) process that models the fluorescence ...
 %impulse response.
 %   lam:  scalar, sparsity penalty parameter lambda.
 %   smin: scalar, optional, default 0
-%miniumal non-zero activity within each bin (minimal 'spike size').
+% minimal non-zero activity within each bin (minimal 'spike size').
 %   T_over_ISI: scalar, ratio of recording duration T and maximumal
 %       inter-spike-interval. default: 1
 %   jitter: bool, perform correction step by jittering spike times to
@@ -21,7 +21,7 @@ function [c, s, active_set] = oasisAR2(y, g, lam, smin, T_over_ISI, jitter, acti
 
 %% outputs
 %   c: T*1 vector, the inferred denoised fluorescence signal at each time-bin.
-%   s: T*1 vector, discetized deconvolved neural activity (spikes)
+%   s: T*1 vector, discretized deconvolved neural activity (spikes)
 %   active_set: npool * 4 matrix, active set
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
