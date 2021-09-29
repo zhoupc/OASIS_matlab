@@ -32,5 +32,5 @@ axis tight;
 xlabel('Time'); 
 ylabel('Fluorescence'); 
 legend('y', 'c', 's'); 
-set(gco, 'fontweigth', 'bold'); 
+set(gco, 'fontweight', 'bold'); 
 saveas(gcf, 'fig/model.pdf'); 
