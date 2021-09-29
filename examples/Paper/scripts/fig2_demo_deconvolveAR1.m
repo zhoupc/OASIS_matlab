@@ -11,7 +11,7 @@ function c = fig2_demo_deconvolveAR1(y, g, lam, video, trueSpikes)
 %   c: T*1 vector, denoised trace
 
 %% Authors: Pengcheng Zhou, Carnegie Mellon University, 2016
-% proted from the Python implementation from Johannes Friedrich
+% ported from the Python implementation from Johannes Friedrich
 
 %% initialization
 y = reshape(y, [], 1);
@@ -110,7 +110,7 @@ for m=1:2:len_active_set
     fill([t0+0.1, t1, t1, t0+0.1], [0.01, 0.01, ymax, ymax], [1,1,1]*0.9, 'edgecolor', 'w');
 end
 temp = find(trueSpikes);
-for m=1:length(temp);
+for m=1:length(temp)
     plot([1, 1]*temp(m), [0, ymax], 'r', 'linewidth', 3);
 end
 ind = 48-ceil((y-min(y))/range(y)*16);
@@ -161,7 +161,7 @@ for m=1:2:len_active_set
     fill([t0, t1, t1, t0], [0.01, 0.01, ymax, ymax], [1,1,1]*0.9, 'edgecolor', 'w');
 end
 temp = find(trueSpikes);
-for m=1:length(temp);
+for m=1:length(temp)
     plot([1, 1]*temp(m), [0, ymax], 'r', 'linewidth', 3);
 end
 ax = gca;
@@ -195,7 +195,7 @@ for m=1:2:len_active_set
     fill([t0, t1, t1, t0], [0.01, 0.01, ymax, ymax], [1,1,1]*0.9, 'edgecolor', 'w');
 end
 temp = find(trueSpikes);
-for m=1:length(temp);
+for m=1:length(temp)
     plot([1, 1]*temp(m), [0, ymax], 'r', 'linewidth', 3);
 end
 ax = gca;
